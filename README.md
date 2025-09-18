@@ -1,151 +1,111 @@
-# GCA\_ChatBotRecomendation
+# 🎓 RecomendaProf
 
-Este repositório contém um chatbot que interage com um modelo matemático para calcular um índice de recomendação personalizado com base nas entradas do usuário.
+RecomendaProf é um **chatbot para recomendação de orientadores de mestrado/doutorado**.  
+Ele utiliza informações extraídas do **Currículo Lattes**, métricas de impacto de publicações (DOI, Impact Factor, CiteScore), e um modelo matemático em **Scikit-learn** para recomendar o professor mais adequado para um aluno de acordo com sua área de pesquisa.
 
----
-
-## 🔎 Descrição do Projeto
-
-O objetivo deste projeto é construir um sistema interativo onde o usuário conversa com um chatbot capaz de:
-
-1. Receber preferências ou consultas do usuário.
-2. Processar essas informações por meio de um modelo matemático que gera um índice de recomendação.
-3. Retornar ao usuário uma recomendação embasada e justificar os pesos e variáveis utilizadas.
-
-O projeto é dividido em duas camadas:
-
-- **Frontend** (interface de chat)
-- **Backend** (cálculo do índice e orquestração do diálogo)
+O projeto está sendo reimplementado em **Python** com **Streamlit** para interface gráfica, **ChromaDB** como banco de embeddings vetoriais, e possibilidade de integração com **PostgreSQL**.
 
 ---
 
-## 🚀 Tecnologias e Ferramentas
+## 🚀 Funcionalidades
 
-- **Python**
-  - [Streamlit](https://streamlit.io/) para prototipagem rápida da interface web.
-  - [FastAPI](https://fastapi.tiangolo.com/) (opcional) para expor endpoints REST em produção.
-  - [Scikit‑learn](https://scikit-learn.org/) / [SciPy](https://www.scipy.org/) para algoritmos matemáticos.
-  - [Pandas](https://pandas.pydata.org/) para manipulação de dados.
-  - [NumPy](https://numpy.org/) para cálculos numéricos.
-  - Modelos de embeddings ou LLM local (por exemplo, Llama) para enriquecer o diálogo.
-- **JavaScript / TypeScript** (opcional)
-  - [Next.js](https://nextjs.org/) ou React para uma interface customizável e escalável.
-  - [Tailwind CSS](https://tailwindcss.com/) para estilo rápido e responsivo.
-  - [Socket.IO](https://socket.io/) ou [WebSockets](https://developer.mozilla.org/docs/Web/API/WebSockets_API) para chat em tempo real.
+- Upload e processamento de currículos Lattes (extração automática de publicações e DOIs).
+- Geração de datasets a partir das informações extraídas.
+- Classificação e ranqueamento de professores de acordo com sua relevância.
+- Chatbot interativo para consulta dos melhores orientadores por área.
+- **Modo Mock**: permite rodar o sistema mesmo sem banco de dados real, ideal para apresentações e demonstrações.
 
 ---
 
-## 📈 Possíveis Modelos Matemáticos
+## 📂 Estrutura do Projeto
 
-| Abordagem                             | Descrição                                                            | Quando usar                                       |
-| ------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------- |
-| Regressão Linear / Múltipla           | Calcula um score contínuo a partir de variáveis quantificáveis.      | Quando índices são lineares e bem definidos.      |
-| Fuzzy Logic                           | Permite lidar com incertezas e graus de pertencimento.               | Quando preferências são subjetivas.               |
-| Collaborative Filtering               | Recomendação baseada em similaridade entre usuários ou itens.        | Em cenários de itens e histórico de usuários.     |
-| Content-Based Filtering               | Recomendação baseada nas características dos itens.                  | Quando há metadados ricos sobre itens.            |
-| Matriz de Utilidade Ponderada         | Combina múltiplos critérios com pesos ajustáveis.                    | Para inserir variáveis de importâncias distintas. |
-| Técnicas baseadas em Machine Learning | Árvores de decisão, Random Forest, SVM para predição de preferência. | Quando há dados históricos de feedback.           |
-
----
-
-## ⚙️ Estrutura do Repositório
-
-```text
-GCA_ChatBotRecomendation/
-│
-├── app/                      # Código Streamlit (frontend minimalista)
-│   ├── main.py               # Entrada da aplicação Streamlit
-│   └── utils.py              # Funções auxiliares (pré-processamento)
-│
-├── backend/                  # API FastAPI (opcional para produção)
-│   ├── server.py             # Endpoints REST
-│   └── models.py             # Definição dos modelos matemáticos
-│
-├── models/                   # Armazenamento de artefatos de modelo (pickle, joblib)
-│
-├── data/                     # Dados de exemplo e schemas
-│   └── sample_data.csv       # Exemplo de entradas para teste
-│
-├── tests/                    # Testes unitários com pytest
-│
-├── .gitignore
-├── requirements.txt          # Dependências do Python
-└── README.md
+```
+.
+├── ingest.py              # Conversão do ProcessadorLattesCompleto.java
+├── recommend.py           # Conversão do ProcessadorQualis.java
+├── dataset_generator.py   # Conversão do GeradorDeDatasets.java
+├── streamlit_app.py       # Interface em Streamlit (menu mock/real incluído)
+├── servidor-unificado.py  # Backend legado
+├── create_tables.sql      # Estrutura de tabelas no PostgreSQL
+├── ProcessadorLattesCompleto.java  # Código original em Java
+├── ProcessadorQualis.java           # Código original em Java
+├── GeradorDeDatasets.java           # Código original em Java
+├── requirements.txt       # Dependências do projeto
+└── README.md              # Documentação
 ```
 
 ---
 
-## 🚀 Como Rodar o Projeto
+## 🛠️ Tecnologias Utilizadas
 
-### Pré-requisitos
+- **Python 3.10+**
+- **Streamlit** – interface web
+- **Pandas** – manipulação de datasets
+- **NumPy** – operações matemáticas
+- **Scikit-learn** – modelo de recomendação
+- **BeautifulSoup4 + lxml** – parsing do Lattes (HTML/XML)
+- **ChromaDB** – banco vetorial para embeddings
+- **PostgreSQL** – armazenamento estruturado
+- **Requests** – integração externa (ex. CrossRef)
 
-- Python 3.8+ instalado
-- `pip` configurado
+---
 
-### Instalação
+## ⚙️ Instalação
 
-1. Clone o repositório:
-
+1. Clone este repositório ou extraia o `.zip`:
    ```bash
-   git clone https://github.com/LuanVitorCD/GCA_ChatBotRecomendation.git
-   cd GCA_ChatBotRecomendation
+   unzip projeto_completo_com_python.zip
+   cd projeto_completo_com_python
    ```
 
-2. Crie um ambiente virtual e instale dependências:
-
+2. Crie um ambiente virtual e instale as dependências:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Linux/macOS
-   .\.venv\\Scripts\\activate  # Windows
+   python -m venv venv
+   source venv/bin/activate   # Linux/Mac
+   venv\Scripts\activate    # Windows
    pip install -r requirements.txt
    ```
 
-### Uso com Streamlit
+---
+
+## ▶️ Como Rodar
+
+### 1. Rodar em modo **Mock (apresentação)**
+Esse modo não precisa de banco de dados e funciona com exemplos fictícios.
 
 ```bash
-streamlit run app/main.py
+streamlit run streamlit_app.py
 ```
 
-A interface ficará disponível em `http://localhost:8501`.
+- No menu lateral do Streamlit, escolha: **Fonte de dados → Mock (apresentação)**  
+- Digite a área de pesquisa desejada (ex: "Redes neurais")  
+- Clique em **Recomendar** para ver os professores simulados.
 
-### Uso via API FastAPI (opcional)
+### 2. Rodar em modo **Banco de dados real**
+Esse modo conecta ao PostgreSQL/ChromaDB (ainda em implementação).
 
-```bash
-uvicorn backend.server:app --reload
-```
+- Configure seu banco PostgreSQL com o script `create_tables.sql`  
+- Configure as credenciais no `servidor-unificado.py`  
+- Rode o app com:  
+  ```bash
+  streamlit run streamlit_app.py
+  ```
+- Escolha no menu lateral: **Fonte de dados → Banco de dados real**
 
-A API estará disponível em `http://localhost:8000`.
+⚠️ Observação: o modo real está planejado para integração futura, mas já possui a estrutura básica pronta.
 
 ---
 
-## 🧮 Modelo Matemático de Exemplo
+## 📊 Modo Mock vs Real
 
-No arquivo `backend/models.py` implementamos uma **Matriz de Utilidade Ponderada**:
-
-```python
-# Exemplo simplificado
-def calcula_indice(dados: dict, pesos: dict) -> float:
-    # dados: {'criterio1': valor1, 'criterio2': valor2, ...}
-    # pesos: {'criterio1': peso1, ...}, soma dos pesos = 1
-    score = sum(dados[k] * pesos.get(k, 0) for k in dados)
-    return score
-```
-
-Você pode estender para regressão, ML ou lógica fuzzy conforme necessidade.
+- **Mock** → Útil para apresentações/demonstrações, usa dados simulados (`dataset_generator.py`).
+- **Real** → Conecta ao banco PostgreSQL e processa currículos Lattes.
 
 ---
 
-## 🤝 Contribuição
+## 👩‍💻 Autoria
 
-1. Fork este repositório
-2. Crie uma branch: `git checkout -b feature/minha-feature`
-3. Faça commit das suas alterações: `git commit -m 'Minha contribuição'`
-4. Push para a branch: `git push origin feature/minha-feature`
-5. Abra um Pull Request
+Este projeto é parte de uma pesquisa de doutorado e está em desenvolvimento contínuo.  
+A lógica matemática do modelo em **Scikit-learn** é fixa (não pode ser alterada), enquanto os demais módulos foram reimplementados em Python.
 
 ---
-
-## 📄 Licença
-
-Este projeto está licenciado sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
