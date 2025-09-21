@@ -1,10 +1,32 @@
-# recommend.py - Adaptado de ProcessadorQualis.java
-import numpy as np
+# recommend.py - Recomendação com TF-IDF + Cosine Similarity
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-def profile_to_feature_vector(profile):
-    total_pubs = len(profile.get("publications", []))
-    return np.array([total_pubs]).reshape(1, -1)
+def recommend_with_tfidf(student_area, professors, top_k=5, threshold=0.4):
+    df = pd.DataFrame(professors)
+    if df.empty:
+        return []
 
-def recommend_mock(student_area, professors):
-    ranked = sorted(professors, key=lambda p: student_area.lower() in p['research'].lower(), reverse=True)
-    return ranked[:5]
+    texts = df['research'].tolist()
+    vectorizer = TfidfVectorizer().fit([student_area] + texts)
+    student_vec = vectorizer.transform([student_area])
+    prof_vecs = vectorizer.transform(texts)
+
+    similarities = cosine_similarity(student_vec, prof_vecs).flatten()
+    df['score'] = similarities
+
+    # Normalizar em relação ao top1
+    max_score = df['score'].max()
+    if max_score > 0:
+        df['percent'] = (df['score'] / max_score * 100).round(2)
+    else:
+        df['percent'] = 0
+
+    # Filtrar pelo threshold relativo ao top1
+    df = df[df['score'] >= max_score * threshold]
+
+    # Ordenar por score decrescente e limitar top_k
+    df = df.sort_values(by='score', ascending=False).head(top_k)
+
+    return df.to_dict(orient='records')

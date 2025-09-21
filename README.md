@@ -1,10 +1,20 @@
 # 🎓 RecomendaProf
 
 RecomendaProf é um **chatbot para recomendação de orientadores de mestrado/doutorado**.  
-Ele utiliza informações extraídas do **Currículo Lattes**, métricas de impacto de publicações (DOI, Impact Factor, CiteScore), e um modelo matemático em **Scikit-learn** para recomendar o professor mais adequado para um aluno de acordo com sua área de pesquisa.
+Ele utiliza informações extraídas do **Currículo Lattes**, métricas de impacto de publicações (DOI, Impact Factor, CiteScore), e um modelo matemático em **Scikit-learn** com **TF-IDF + Cosine Similarity** para recomendar o professor mais adequado para um aluno de acordo com sua área de pesquisa.
 
+---
 O projeto está sendo reimplementado em **Python** com **Streamlit** para interface gráfica, **ChromaDB** como banco de embeddings vetoriais, e possibilidade de integração com **PostgreSQL**.
 
+---
+
+## 🔍 Como funciona a recomendação?
+
+- O texto da área de interesse do aluno é comparado com as linhas de pesquisa dos professores.  
+- Utilizamos **TF-IDF (Term Frequency – Inverse Document Frequency)** para representar os textos numericamente.  
+- Depois aplicamos **Cosine Similarity** para calcular a proximidade entre a área do aluno e cada professor.  
+- O resultado mostra até **5 professores mais relevantes**, com **percentuais de afinidade**.  
+- Apenas professores com pelo menos **40% da afinidade relativa ao melhor resultado** são exibidos (mínimo 1 professor, máximo 5).
 ---
 
 ## 🚀 Funcionalidades
@@ -42,7 +52,7 @@ O projeto está sendo reimplementado em **Python** com **Streamlit** para interf
 - **Streamlit** – interface web
 - **Pandas** – manipulação de datasets
 - **NumPy** – operações matemáticas
-- **Scikit-learn** – modelo de recomendação
+- **Scikit-learn** – modelo de recomendação (TF-IDF + Cosine Similarity)
 - **BeautifulSoup4 + lxml** – parsing do Lattes (HTML/XML)
 - **ChromaDB** – banco vetorial para embeddings
 - **PostgreSQL** – armazenamento estruturado
@@ -108,4 +118,4 @@ Esse modo conecta ao PostgreSQL/ChromaDB (ainda em implementação).
 Este projeto é parte de uma pesquisa de doutorado e está em desenvolvimento contínuo.  
 A lógica matemática do modelo em **Scikit-learn** é fixa (não pode ser alterada), enquanto os demais módulos foram reimplementados em Python.
 
----
+...
