@@ -1,6 +1,21 @@
 # -*- coding: utf-8 -*-
 
 # --------------------------------------------------------------------------- #
+#                                 AVISO IMPORTANTE                            #
+# --------------------------------------------------------------------------- #
+# Este arquivo (`servidor-unificado.py`) representa a implementação original  #
+# e LEGADA do backend, utilizando Flask, clustering e queries complexas.      #
+#                                                                             #
+# O projeto ATUAL, conforme o README.md, utiliza uma abordagem mais direta    #
+# com Streamlit + Scikit-learn (TF-IDF), que é implementada nos arquivos      #
+# `streamlit_app.py`, `recommend.py` e `db_utils.py`.                         #
+#                                                                             #
+# Este script é mantido aqui para fins de referência e consulta histórica,    #
+# mas NÃO é utilizado pela aplicação principal em Streamlit.                  #
+# --------------------------------------------------------------------------- #
+
+
+# --------------------------------------------------------------------------- #
 #                                   IMPORTS                                   #
 # --------------------------------------------------------------------------- #
 # Framework web
@@ -62,6 +77,7 @@ class Areas(object):
         ids = pd.DataFrame(data, columns = ['id_pessoa'])
         return ', '.join(ids.id_pessoa.astype(str).values)
 
+# ... (restante do código legado sem alterações)
 # --------------------------------------------------------------------------- #
 #                          CLASSE ClusterPalavras                             #
 #         (Originalmente em clustering/cluster_palavras.py)                   #

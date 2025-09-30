@@ -1,3 +1,15 @@
+# Arquivos de ambiente virtual
 venv/
 .venv/
+env/
+.env
+
+# Cache e arquivos compilados do Python
 __pycache__/
+*.pyc
+
+# Ignorar o cache local do ChromaDB
+chroma_db_cache/
+
+# Arquivos de configuração de IDEs (exemplo para VSCode)
+.vscode/

@@ -31,17 +31,28 @@ O projeto está sendo reimplementado em **Python** com **Streamlit** para interf
 
 ```
 .
+├── chroma_utils.py        # Utilitário para coisas banco de dados ChromaDB
+├── db_utils.py            # Utilitário para coisas bando de dados PostgreSQL
 ├── ingest.py              # Conversão do ProcessadorLattesCompleto.java
 ├── recommend.py           # Conversão do ProcessadorQualis.java
 ├── dataset_generator.py   # Conversão do GeradorDeDatasets.java
 ├── streamlit_app.py       # Interface em Streamlit (menu mock/real incluído)
-├── servidor-unificado.py  # Backend legado
-├── create_tables.sql      # Estrutura de tabelas no PostgreSQL
-├── ProcessadorLattesCompleto.java  # Código original em Java
-├── ProcessadorQualis.java           # Código original em Java
-├── GeradorDeDatasets.java           # Código original em Java
 ├── requirements.txt       # Dependências do projeto
-└── README.md              # Documentação
+├── README.md              # Documentação
+│
+├── legacy_java/
+│   ├── ProcessadorLattesCompleto.java # Código original em Java
+│   ├── ProcessadorQualis.java         # Código original em Java
+│   ├── GeradorDeDatasets.java         # Código original em Java
+│
+├── sql/
+│   └── create_tables.sql # Estrutura de tabelas no PostgreSQL
+│
+├── utils/
+│   └── servidor-unificado.py # Backend legado
+│
+└── assets/
+    └── exemplo.png
 ```
 
 ---
@@ -101,8 +112,6 @@ Esse modo conecta ao PostgreSQL/ChromaDB (ainda em implementação).
   streamlit run streamlit_app.py
   ```
 - Escolha no menu lateral: **Fonte de dados → Banco de dados real**
-
-⚠️ Observação: o modo real está planejado para integração futura, mas já possui a estrutura básica pronta.
 
 ---
 
