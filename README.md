@@ -8,6 +8,11 @@ O projeto está sendo reimplementado em **Python** com **Streamlit** para interf
 
 ---
 
+## 🖼️ Imagem do projeto rodando
+![Exemplo do projeto rodando com dados mockados](assets/example_mockeddata.png)
+
+---
+
 ## 🔍 Como funciona a recomendação?
 
 - O texto da área de interesse do aluno é comparado com as linhas de pesquisa dos professores.  
@@ -103,22 +108,27 @@ streamlit run streamlit_app.py
 - Clique em **Recomendar** para ver os professores simulados.
 
 ### 2. Rodar em modo **Banco de dados real**
-Esse modo conecta ao PostgreSQL/ChromaDB (ainda em implementação).
+Esse modo conecta ao PostgreSQL/ChromaDB.
 
-- Configure seu banco PostgreSQL com o script `create_tables.sql`  
-- Configure as credenciais no `servidor-unificado.py`  
+- Crie as tables de seu banco PostgreSQL com o script `create_tables.sql`
+- Configure as credenciais no `db_utils.py`  
 - Rode o app com:  
   ```bash
   streamlit run streamlit_app.py
   ```
 - Escolha no menu lateral: **Fonte de dados → Banco de dados real**
+- Se certifique de ter dados suficientes no banco PostgreSQL
+- Clique no botão no menu lateral: "Sincronizar PosgreSQL -> ChromaDB"
+- Aparecerá um alerta em verde caso tenha sucesso na sincronização
+- Digite a área de pesquisa desejada (ex: "Redes neurais")
+- Clique em **Recomendar** para ver os professores simulados.
 
 ---
 
 ## 📊 Modo Mock vs Real
 
 - **Mock** → Útil para apresentações/demonstrações, usa dados simulados (`dataset_generator.py`).
-- **Real** → Conecta ao banco PostgreSQL e processa currículos Lattes.
+- **Real** → Utiliza o banco ChromaDB, com dados transferidos do banco principal PostgreSQL.
 
 ---
 
@@ -126,5 +136,3 @@ Esse modo conecta ao PostgreSQL/ChromaDB (ainda em implementação).
 
 Este projeto é parte de uma pesquisa de doutorado e está em desenvolvimento contínuo.  
 A lógica matemática do modelo em **Scikit-learn** é fixa (não pode ser alterada), enquanto os demais módulos foram reimplementados em Python.
-
-...
