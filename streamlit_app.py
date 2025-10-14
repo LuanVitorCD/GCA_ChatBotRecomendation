@@ -1,103 +1,128 @@
-# streamlit_app.py - Interface principal com Streamlit
+# streamlit_app.py - Interface principal com Streamlit (versão Híbrida Final)
 import streamlit as st
 import pandas as pd
 import traceback
+import chromadb
 
-# Funções do projeto
-from dataset_generator import generate_mock_dataset
-from recommend import recommend_with_tfidf
-from db_utils import get_professors_data
-from chroma_utils import sync_postgres_to_chroma, get_all_professors_from_chroma # Novas importações
+# --- Importando a lógica de recomendação e utilitários ---
+from recommend_chroma import recommend_hybrid_with_chroma
+from chroma_utils import sync_postgres_to_chroma
 
-# --- Configuração da Página ---
-st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
+# --------------------------------------------------------------------------- #
+#                      SETUP DO CHROMA DB (CACHE)                             #
+# --------------------------------------------------------------------------- #
 
-# --- Cabeçalho ---
-st.title("🎓 RecomendaProf")
-st.write("Um chatbot para recomendação de orientadores de mestrado e doutorado com base na sua área de pesquisa.")
+@st.cache_resource
+def get_chroma_collection():
+    """
+    Inicializa o cliente PERSISTENTE do ChromaDB e retorna a coleção.
+    A função de embedding é gerenciada internamente pelo ChromaDB.
+    """
+    try:
+        client = chromadb.PersistentClient(path="chroma_db_cache")
+        collection = client.get_or_create_collection(
+            name="orientadores_academicos"
+        )
+        print("Instância do ChromaDB e coleção carregadas com sucesso.")
+        return collection
+    except Exception as e:
+        st.error(f"Não foi possível inicializar o ChromaDB: {e}")
+        return None
 
-# --- Barra Lateral (Sidebar) ---
+# Carrega a coleção uma vez para todo o app
+collection = get_chroma_collection()
+
+
+# --------------------------------------------------------------------------- #
+#                   FUNÇÃO PARA EXIBIR OS CARDS DE RESULTADO                  #
+# --------------------------------------------------------------------------- #
+
+def display_results_as_cards(results):
+    """ Exibe os resultados em um layout de cards expansíveis. """
+    st.success(f"Encontramos {len(results)} orientador(es) com alta afinidade:")
+    num_cols = len(results) if len(results) <= 3 else 3
+    cols = st.columns(num_cols)
+    for i, r in enumerate(results):
+        with cols[i % num_cols]:
+            with st.container(border=True):
+                st.markdown(f"#### {r['nome']}")
+                st.markdown(f"**Score Híbrido: {r['hybrid_score']:.2f}**")
+                st.progress(r['hybrid_score'])
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(label="Similaridade", value=f"{r['semantic_similarity']:.2f}")
+                with col2:
+                    st.metric(label="Produtividade", value=f"{r['norm_productivity_score']:.2f}")
+                with st.expander("Ver mais detalhes"):
+                    meta = r['metadata']
+                    st.markdown(f"**ID:** `{meta['id_pessoa']}`")
+                    st.markdown(f"**Áreas:** `{meta['areas']}`")
+                    # CORREÇÃO: Corrigido o erro de digitação de 'tem_dourado' para 'tem_doutorado'
+                    st.markdown(f"**Programa de Doutorado:** {'Sim' if meta.get('tem_doutorado') else 'Não'}")
+                    st.divider()
+                    st.markdown("**Métricas de Produtividade (originais):**")
+                    st.json({
+                        "Publicações (contagem)": meta.get('publicacoes_count', 0),
+                        "Orientações (contagem)": meta.get('orientacoes_count', 0),
+                        "Score Qualis": meta.get('qualis_score', 0)
+                    })
+
+# --------------------------------------------------------------------------- #
+#                      INTERFACE PRINCIPAL DO STREAMLIT                       #
+# --------------------------------------------------------------------------- #
+
+st.set_page_config(page_title="RecomendaProf Híbrido", layout="wide", initial_sidebar_state="expanded")
+st.title("🎓 RecomendaProf Híbrido")
+st.write("Um sistema de recomendação que combina **similaridade semântica** com **métricas de produtividade acadêmica**.")
+
 st.sidebar.title("Configurações")
-data_source = st.sidebar.selectbox("Fonte de dados", ["Mock (apresentação)", "Banco de dados real"])
+only_doctors = st.sidebar.checkbox("Recomendar apenas orientadores de programas de Doutorado")
 
-st.sidebar.info("Este projeto utiliza TF-IDF e Similaridade de Cossenos para encontrar os orientadores mais alinhados à sua pesquisa.")
+st.sidebar.title("Gerenciamento de Dados")
+st.sidebar.write("Sincronize os dados do PostgreSQL para o cache local (ChromaDB).")
 
-# --- Nova Seção: Gerenciamento de Dados ---
-if data_source == "Banco de dados real":
-    st.sidebar.title("Gerenciamento de Dados")
-    st.sidebar.write("Como o banco de dados real (PostgreSQL) pode ser lento para consultas repetidas, usamos um cache local (ChromaDB) para acelerar as recomendações.")
-    
-    if st.sidebar.button("Sincronizar PostgreSQL ➔ ChromaDB"):
+if st.sidebar.button("Sincronizar PostgreSQL ➔ ChromaDB"):
+    if collection is None:
+        st.sidebar.error("ChromaDB não foi inicializado. Verifique os logs.")
+    else:
         try:
             with st.spinner("Buscando dados do PostgreSQL e salvando no ChromaDB..."):
-                count = sync_postgres_to_chroma()
+                count = sync_postgres_to_chroma(collection)
             st.sidebar.success(f"{count} orientador(es) sincronizados com sucesso!")
             st.toast("Sincronização concluída!", icon="✅")
         except Exception as e:
             st.sidebar.error("Falha na sincronização.")
             st.toast("Erro ao sincronizar.", icon="❌")
-            # Mostra o erro detalhado no app principal para depuração
             st.error(f"Detalhes do erro de sincronização: {e}")
 
-
-# --- Inputs do Usuário ---
 st.header("Qual é o seu interesse de pesquisa?")
-student_area = st.text_input(
-    "Digite as palavras-chave da sua área de pesquisa:",
-    "Redes neurais para processamento de imagens médicas"
-)
+student_area = st.text_input("Palavras-chave (ex: inteligência artificial, redes neurais):", "Redes neurais para imagens médicas")
+student_text_details = st.text_area("Descreva com mais detalhes seu projeto:", "Meu foco é usar deep learning para detectar anomalias em ressonância magnética.", height=100)
 
-student_text_details = st.text_area(
-    "Se quiser, descreva um pouco mais sobre seu projeto (opcional):",
-    "Meu foco é utilizar deep learning, especificamente redes convolucionais, para detectar anomalias em exames de ressonância magnética.",
-    height=100
-)
-
-recommend_button = st.button("Recomender Orientadores")
-
-# --- Lógica de Recomendação ---
-if recommend_button:
-    if not student_area:
-        st.error("Por favor, digite sua área de pesquisa.")
+if st.button("Recomender Orientadores"):
+    if not student_area and not student_text_details:
+        st.error("Por favor, descreva sua área de pesquisa.")
+    elif collection is None:
+        st.error("A conexão com o ChromaDB falhou. Verifique o console.")
+    elif collection.count() == 0:
+        st.warning("Nenhum orientador no cache. Sincronize os dados na barra lateral.")
     else:
-        results = []
-        if data_source == "Mock (apresentação)":
-            st.info("Executando em modo de demonstração com dados fictícios.")
-            with st.spinner("Gerando dados e calculando recomendações..."):
-                professors_df = generate_mock_dataset()
-                professors_list = professors_df.to_dict(orient="records")
-                results = recommend_with_tfidf(student_area, professors_list)
-
-        else: # "Banco de dados real"
-            st.info("Buscando orientadores a partir do cache local (ChromaDB)...")
-            with st.spinner("Lendo dados e calculando recomendações..."):
-                try:
-                    # Busca os dados dos professores do ChromaDB
-                    professors_list = get_all_professors_from_chroma()
-                    if not professors_list:
-                         st.warning("Nenhum orientador encontrado no cache local. Sincronize os dados na barra lateral.")
-                    else:
-                        results = recommend_with_tfidf(student_area, professors_list)
-
-                except Exception as e:
-                    st.error("Falha ao ler dados do ChromaDB.")
-                    st.error("Certifique-se de que os dados foram sincronizados e o ChromaDB está acessível.")
-                    with st.expander("Detalhes do Erro"):
-                        st.code(traceback.format_exc())
-
-        # --- Exibição dos Resultados ---
-        st.header("Resultados da Recomendação")
-        if results:
-            st.success(f"Encontramos {len(results)} orientador(es) com alta afinidade:")
-            # Criando colunas para um layout mais limpo
-            num_cols = len(results) if len(results) <= 3 else 3
-            cols = st.columns(num_cols)
-            for i, r in enumerate(results):
-                with cols[i % num_cols]:
-                    st.markdown(f"### {r['name']}")
-                    st.markdown(f"**Afinidade:** `{r['percent']}%`")
-                    st.markdown(f"**Linha de Pesquisa:**")
-                    st.caption(f"{r['research']}")
-        else:
-            st.warning("Nenhum orientador com afinidade suficiente foi encontrado para a área de pesquisa informada.")
+        full_query = f"{student_area}. {student_text_details}"
+        with st.spinner("Buscando e ranqueando os melhores orientadores..."):
+            try:
+                results = recommend_hybrid_with_chroma(
+                    student_query=full_query,
+                    collection=collection,
+                    only_doctors=only_doctors,
+                    top_k=5
+                )
+                st.header("Resultados da Recomendação")
+                if results:
+                    display_results_as_cards(results)
+                else:
+                    st.warning("Nenhum orientador com afinidade suficiente foi encontrado.")
+            except Exception:
+                st.error("Ocorreu um erro durante a recomendação.")
+                with st.expander("Detalhes do Erro"):
+                    st.code(traceback.format_exc())
 

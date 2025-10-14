@@ -1,106 +1,97 @@
-# chroma_utils.py - Funções para interagir com o banco de dados vetorial ChromaDB
+# chroma_utils.py - Funções para interagir com o ChromaDB (versão corrigida e final)
 import chromadb
-from db_utils import get_professors_data
+import pandas as pd
+import streamlit as st
+from db_utils import get_db_connection
 
-# --- Configurações do ChromaDB ---
-# Vamos usar um cliente persistente, que salva os dados em disco.
-# Isso garante que o cache não seja perdido ao reiniciar o app.
-CHROMA_PATH = "chroma_db_cache"
-COLLECTION_NAME = "professors"
-
-def get_chroma_client():
-    """Cria e retorna um cliente ChromaDB persistente."""
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
-    return client
-
-def get_or_create_professors_collection():
-    """Obtém ou cria a coleção para armazenar os dados dos professores."""
-    client = get_chroma_client()
-    collection = client.get_or_create_collection(name=COLLECTION_NAME)
-    return collection
-
-def sync_postgres_to_chroma():
+def sync_postgres_to_chroma(collection):
     """
-    Busca todos os dados de professores do PostgreSQL e os insere/atualiza
-    na coleção do ChromaDB, que funciona como um cache rápido.
+    Busca dados do PostgreSQL e os insere na coleção FORNECIDA do ChromaDB.
+    A lógica agora limpa os itens da coleção em vez de recriá-la.
     """
+    if collection is None:
+        raise ValueError("A coleção do ChromaDB não foi inicializada corretamente.")
+        
     print("Iniciando sincronização: PostgreSQL -> ChromaDB")
     
-    # 1. Buscar dados do PostgreSQL
-    professors = get_professors_data()
-    if not professors:
+    try:
+        conn = get_db_connection()
+        sql_query = """
+        WITH publicacoes_agg AS (
+            SELECT 
+                id_pessoa, 
+                COUNT(*) as publicacoes_count,
+                STRING_AGG(titulo, '. ') as research_text
+            FROM publicacao
+            GROUP BY id_pessoa
+        ),
+        orientacoes_agg AS (
+            SELECT id_pessoa, COUNT(*) as orientacoes_count FROM orientacao GROUP BY id_pessoa
+        ),
+        qualis_agg AS (
+            SELECT p.id_pessoa, 
+                   AVG(CASE q.estrato WHEN 'A1' THEN 100 WHEN 'A2' THEN 87.5 WHEN 'B1' THEN 50 ELSE 20 END) as qualis_score
+            FROM publicacao p JOIN qualis q ON REPLACE(p.issn, '-', '') = REPLACE(q.issn, '-', '')
+            GROUP BY p.id_pessoa
+        ),
+        areas_agg AS (
+            SELECT id_pessoa, STRING_AGG(DISTINCT area_conhecimento, ', ') as areas
+            FROM area_conhecimento GROUP BY id_pessoa
+        ),
+        doutorado_agg AS (
+            SELECT pp.id_pessoa, BOOL_OR(p.doutorado) as tem_doutorado
+            FROM pessoa_ppg pp JOIN ppg p ON pp.id_ppg = p.id
+            GROUP BY pp.id_pessoa
+        )
+        SELECT 
+            p.id as id_pessoa, p.nome as nome_pessoa,
+            COALESCE(pa.publicacoes_count, 0) as publicacoes_count,
+            COALESCE(oa.orientacoes_count, 0) as orientacoes_count,
+            COALESCE(qa.qualis_score, 0) as qualis_score,
+            COALESCE(aa.areas, '') as areas,
+            COALESCE(da.tem_doutorado, FALSE) as tem_doutorado,
+            COALESCE(pa.research_text, p.nome) as research_text
+        FROM pessoa p
+        LEFT JOIN publicacoes_agg pa ON p.id = pa.id_pessoa
+        LEFT JOIN orientacoes_agg oa ON p.id = oa.id_pessoa
+        LEFT JOIN qualis_agg qa ON p.id = qa.id_pessoa
+        LEFT JOIN areas_agg aa ON p.id = aa.id_pessoa
+        LEFT JOIN doutorado_agg da ON p.id = da.id_pessoa;
+        """
+        professors_df = pd.read_sql_query(sql_query, conn)
+        conn.close()
+    except Exception as e:
+        print(f"ERRO ao buscar dados do PostgreSQL: {e}")
+        raise e
+
+    if professors_df.empty:
         print("Nenhum professor encontrado no PostgreSQL para sincronizar.")
         return 0
 
-    collection = get_or_create_professors_collection()
+    # --- CORREÇÃO DEFINITIVA ---
+    # 1. Pegamos os IDs de todos os documentos que já existem na coleção.
+    existing_ids = collection.get(include=[])['ids']
+    if existing_ids:
+        # 2. Se existirem IDs, nós os deletamos. Isso limpa a coleção sem destruí-la.
+        print(f"Limpando {len(existing_ids)} registros antigos da coleção...")
+        collection.delete(ids=existing_ids)
+
+    # 3. Agora, adicionamos os novos dados à coleção agora vazia.
+    for col in ['publicacoes_count', 'orientacoes_count']:
+        professors_df[col] = professors_df[col].astype(int)
+    professors_df['qualis_score'] = professors_df['qualis_score'].astype(float)
+    professors_df['id_pessoa'] = professors_df['id_pessoa'].astype(str)
     
-    # 2. Limpa a coleção antiga para garantir que dados removidos do Postgres
-    #    não permaneçam no cache. (Opcional, mas recomendado para consistência)
-    #    Para limpar, deletamos a coleção e criamos de novo.
-    client = get_chroma_client()
-    if COLLECTION_NAME in [c.name for c in client.list_collections()]:
-        print(f"Limpando coleção antiga '{COLLECTION_NAME}'...")
-        client.delete_collection(name=COLLECTION_NAME)
-    collection = get_or_create_professors_collection()
+    professors_df['research_text'] = professors_df['research_text'].replace('', 'Sem descrição de pesquisa detalhada.')
 
-    # 3. Prepara os dados para o formato do ChromaDB
-    #    IDs devem ser strings.
-    ids = [str(p['id']) for p in professors]
-    documents = [p['research'] for p in professors]
-    metadatas = [{'name': p['name']} for p in professors]
+    documents = professors_df['research_text'].tolist()
+    metadatas = professors_df.drop(columns=['research_text']).to_dict(orient='records')
+    ids = professors_df['id_pessoa'].tolist()
 
-    # 4. Adiciona os dados à coleção
-    #    ChromaDB não precisa de embeddings para armazenar documentos.
-    #    Usaremos ele como um "document store" rápido.
     if ids:
-        collection.add(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas
-        )
+        collection.add(ids=ids, documents=documents, metadatas=metadatas)
         print(f"Sincronização concluída. {len(ids)} orientadores adicionados ao ChromaDB.")
         return len(ids)
+        
     return 0
 
-def get_all_professors_from_chroma():
-    """
-    Recupera todos os dados de professores do cache ChromaDB e os formata
-    para a função de recomendação.
-    """
-    collection = get_or_create_professors_collection()
-    
-    # O método 'get()' sem IDs retorna tudo (com um limite alto)
-    results = collection.get(include=["metadatas", "documents"])
-    
-    if not results or not results['ids']:
-        return []
-
-    professors_list = []
-    for i in range(len(results['ids'])):
-        professors_list.append({
-            'id': results['ids'][i],
-            'name': results['metadatas'][i]['name'],
-            'research': results['documents'][i]
-        })
-        
-    return professors_list
-
-if __name__ == '__main__':
-    # Bloco para testar as funções diretamente
-    print("--- Testando Sincronização ---")
-    try:
-        count = sync_postgres_to_chroma()
-        print(f"Teste de sincronização finalizado. {count} registros processados.")
-        
-        if count > 0:
-            print("\n--- Testando Leitura do ChromaDB ---")
-            professors = get_all_professors_from_chroma()
-            if professors:
-                print(f"Sucesso! Encontrados {len(professors)} professores no ChromaDB.")
-                print("Exemplo do primeiro professor:")
-                print(professors[0])
-            else:
-                print("Falha ao ler dados do ChromaDB após a sincronização.")
-    except Exception as e:
-        print(f"\nOcorreu um erro durante o teste: {e}")
-        print("Verifique se seu banco de dados PostgreSQL está rodando e acessível.")
