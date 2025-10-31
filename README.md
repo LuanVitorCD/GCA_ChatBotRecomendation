@@ -95,8 +95,8 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 ## ⚙️ Instalação
 
 ```bash
-git clone [URL_DO_SEU_REPOSITORIO]
-cd [NOME_DO_PROJETO]
+git clone https://github.com/LuanVitorCD/GCA_ChatBotRecomendation.git
+cd GCA_ChatBotRecomendation
 
 python -m venv venv
 source venv/bin/activate   # Linux/Mac
