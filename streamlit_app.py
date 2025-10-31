@@ -3,12 +3,19 @@ import streamlit as st
 import pandas as pd
 import traceback
 import chromadb
+import re # Para limpar o texto da nuvem de palavras
 
 # --- Importando a lógica de recomendação e utilitários ---
 from recommend_chroma import recommend_hybrid_with_chroma
 from chroma_utils import sync_postgres_to_chroma
-# Adicionada a nova função para buscar publicações
 from db_utils import get_publications_by_professor_id
+
+# --- IMPORTANDO O NOVO MOTOR LEGADO ---
+from recommend_legacy import recommend_legacy_clustering
+
+# --- NOVOS IMPORTS VISUAIS ---
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 
 # --------------------------------------------------------------------------- #
 #                      SETUP DO CHROMA DB (CACHE)                             #
@@ -34,6 +41,7 @@ collection = get_chroma_collection()
 #             FUNÇÃO PARA APLICAR TEMA CUSTOMIZADO (PRETO E AZUL)             #
 # --------------------------------------------------------------------------- #
 def set_custom_theme():
+    # ... (código do tema inalterado) ...
     st.markdown("""
         <style>
             /* Cor do texto principal */
@@ -86,7 +94,7 @@ def set_custom_theme():
 # --------------------------------------------------------------------------- #
 def display_results_as_cards(results, publication_limit):
     """ Exibe os resultados em um layout de cards mais elaborado e com dropdown de publicações. """
-    st.header("⭐ Orientadores Recomendados")
+    st.header("⭐ Orientadores Recomendados (Moderno)")
     st.markdown("Abaixo estão os professores com maior afinidade com seu tema de pesquisa.")
 
     num_cols = min(len(results), 3)
@@ -107,7 +115,10 @@ def display_results_as_cards(results, publication_limit):
                 meta = r['metadata']
 
                 with st.expander("Ver mais detalhes"):
-                    st.markdown(f"**Áreas de Conhecimento:** `{meta['areas']}`")
+                    # CORREÇÃO: Usa 'Não informado' como padrão se a área estiver vazia
+                    areas_display = meta.get('areas') if meta.get('areas') else "Não informado"
+                    st.markdown(f"**Áreas de Conhecimento:** `{areas_display}`")
+                    
                     status_doutorado = "Sim" if meta.get('tem_doutorado') else "Não"
                     st.markdown(f"**Vinculado a Doutorado:** {status_doutorado}")
                     st.json({
@@ -117,6 +128,8 @@ def display_results_as_cards(results, publication_limit):
                     })
                 
                 with st.expander("Ver publicações"):
+                    # A busca de publicações é específica do ChromaDB, 
+                    # então desabilitamos para o legado ou buscamos de forma diferente
                     with st.spinner("Buscando publicações..."):
                         publications, total_count = get_publications_by_professor_id(r['id'], limit=publication_limit)
                     
@@ -128,6 +141,46 @@ def display_results_as_cards(results, publication_limit):
                             st.info(f"Mostrando {len(publications)} de {total_count} publicações.")
                     else:
                         st.info("Nenhuma publicação encontrada.")
+
+# --------------------------------------------------------------------------- #
+#               NOVA FUNÇÃO: GERAR NUVEM DE PALAVRAS                          #
+# --------------------------------------------------------------------------- #
+def create_word_cloud(text):
+    """Gera e exibe uma nuvem de palavras a partir do texto de consulta."""
+    # Limpeza simples do texto (remove pontuação e palavras curtas)
+    text = re.sub(r'[^\w\s]', '', text).lower()
+    words = [word for word in text.split() if len(word) > 2]
+    cleaned_text = " ".join(words)
+
+    if not cleaned_text:
+        st.info("Digite mais termos para gerar a nuvem de palavras.")
+        return
+
+    try:
+        # Gerar a nuvem de palavras
+        wordcloud = WordCloud(
+            width=800, 
+            height=200, # Altura reduzida
+            background_color='#0E1117', # Cor de fundo do Streamlit
+            colormap='viridis', 
+            collocations=False,
+            min_font_size=10,
+            color_func=lambda *args, **kwargs: (255,255,255) # Texto branco
+        ).generate(cleaned_text)
+
+        # Exibir a nuvem de palavras
+        fig, ax = plt.subplots(figsize=(10, 3)) # figsize reduzido
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis('off')
+        plt.gca().set_facecolor('#0E1117') # Fundo do plot
+        fig.patch.set_facecolor('#0E1117') # Fundo da figura
+        
+        st.pyplot(fig, use_container_width=True)
+        
+    except ValueError:
+        st.warning("Não foi possível gerar a nuvem de palavras (talvez o texto seja muito curto).")
+    except Exception as e:
+        st.error(f"Erro ao gerar nuvem de palavras: {e}")
 
 
 # --------------------------------------------------------------------------- #
@@ -142,6 +195,17 @@ st.divider()
 
 with st.sidebar:
     st.title("⚙️ Configurações")
+    
+    # --- NOVO: SELETOR DE MOTOR ---
+    st.subheader("Motor de Recomendação")
+    recommendation_mode = st.radio(
+        "Selecione o motor para a recomendação:",
+        ("Moderno (Vetorial)", "Legado (Clustering)"),
+        help="Vetorial: Usa ChromaDB para busca semântica (rápido). Clustering: Usa a lógica original de clustering e SQL (lento)."
+    )
+    st.divider()
+    
+    st.subheader("Filtros")
     only_doctors = st.checkbox("Apenas de programas com Doutorado", value=True)
     top_k_slider = st.slider("Número de recomendações", min_value=3, max_value=9, value=3)
     
@@ -183,25 +247,52 @@ student_text_details = st.text_area(
 if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="primary"):
     if not student_area and not student_text_details:
         st.error("Por favor, descreva sua área de pesquisa.")
-    elif collection is None:
-        st.error("A conexão com o ChromaDB falhou. Verifique o console.")
-    elif collection.count() == 0:
-        st.warning("Nenhum orientador no cache. Sincronize os dados na barra lateral.")
     else:
         full_query = f"{student_area}. {student_text_details}"
-        with st.spinner("Buscando e ranqueando os melhores orientadores..."):
-            try:
-                results = recommend_hybrid_with_chroma(
-                    student_query=full_query, collection=collection,
-                    only_doctors=only_doctors, top_k=top_k_slider
-                )
-                st.divider()
-                if results:
-                    display_results_as_cards(results, max_pubs_limit)
-                else:
-                    st.warning("Nenhum orientador com afinidade suficiente foi encontrado.")
-            except Exception:
-                st.error("Ocorreu um erro durante a recomendação.")
-                with st.expander("Detalhes do Erro"):
-                    st.code(traceback.format_exc())
+
+        # --- NUVEM DE PALAVRAS ---
+        st.subheader("☁️ Nuvem de Termos da Busca")
+        create_word_cloud(full_query)
+        st.divider()
+
+        # --- LÓGICA DE SELEÇÃO DE MOTOR ---
+        if recommendation_mode == "Moderno (Vetorial)":
+            if collection is None:
+                st.error("A conexão com o ChromaDB falhou. Verifique o console.")
+            elif collection.count() == 0:
+                st.warning("Nenhum orientador no cache. Sincronize os dados na barra lateral.")
+            else:
+                with st.spinner("Buscando e ranqueando (Motor Moderno)..."):
+                    try:
+                        results = recommend_hybrid_with_chroma(
+                            student_query=full_query, collection=collection,
+                            only_doctors=only_doctors, top_k=top_k_slider
+                        )
+                        st.divider()
+                        if results:
+                            display_results_as_cards(results, max_pubs_limit)
+                        else:
+                            st.warning("Nenhum orientador com afinidade suficiente foi encontrado.")
+                    except Exception:
+                        st.error("Ocorreu um erro durante a recomendação moderna.")
+                        with st.expander("Detalhes do Erro"):
+                            st.code(traceback.format_exc())
+        
+        elif recommendation_mode == "Legado (Clustering)":
+            st.info("Executando o motor legado (Clustering + SQL). Isso pode demorar vários segundos...")
+            with st.spinner("Buscando, clusterizando e ranqueando (Motor Legado)..."):
+                try:
+                    legacy_results_str = recommend_legacy_clustering(full_query, only_doctors)
+                    st.divider()
+                    st.header("⭐ Orientadores Recomendados (Legado)")
+                    st.text_area("Resultados", legacy_results_str, height=300)
+                
+                except ImportError:
+                    st.error("Erro: O motor legado requer 'spacy'.")
+                    st.code("pip install spacy")
+                    st.code("python -m spacy download pt_core_news_md")
+                except Exception:
+                    st.error("Ocorreu um erro durante a recomendação legada.")
+                    with st.expander("Detalhes do Erro"):
+                        st.code(traceback.format_exc())
 

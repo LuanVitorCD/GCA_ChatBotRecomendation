@@ -13,3 +13,6 @@ chroma_db_cache/
 
 # Arquivos de configuração de IDEs (exemplo para VSCode)
 .vscode/
+
+#cluster1 criado para debugar motor legado
+cluster1.csv

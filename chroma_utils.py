@@ -35,8 +35,11 @@ def sync_postgres_to_chroma(collection):
             GROUP BY p.id_pessoa
         ),
         areas_agg AS (
-            SELECT id_pessoa, STRING_AGG(DISTINCT area_conhecimento, ', ') as areas
-            FROM area_conhecimento GROUP BY id_pessoa
+            -- CORREÇÃO: Adicionado TRIM() e filtro para remover valores nulos ou vazios
+            SELECT id_pessoa, STRING_AGG(DISTINCT TRIM(area_conhecimento), ', ') as areas
+            FROM area_conhecimento
+            WHERE area_conhecimento IS NOT NULL AND TRIM(area_conhecimento) <> ''
+            GROUP BY id_pessoa
         ),
         doutorado_agg AS (
             SELECT pp.id_pessoa, BOOL_OR(p.doutorado) as tem_doutorado
@@ -48,9 +51,11 @@ def sync_postgres_to_chroma(collection):
             COALESCE(pa.publicacoes_count, 0) as publicacoes_count,
             COALESCE(oa.orientacoes_count, 0) as orientacoes_count,
             COALESCE(qa.qualis_score, 0) as qualis_score,
-            COALESCE(aa.areas, '') as areas,
+            -- CORREÇÃO: Define 'Não informado' como padrão no SQL se o JOIN falhar
+            COALESCE(aa.areas, 'Não informado') as areas,
             COALESCE(da.tem_doutorado, FALSE) as tem_doutorado,
-            COALESCE(pa.research_text, p.nome) as research_text
+            -- CORREÇÃO: Coalesce mais robusto para research_text
+            COALESCE(pa.research_text, p.nome, 'Sem descrição de pesquisa detalhada') as research_text
         FROM pessoa p
         LEFT JOIN publicacoes_agg pa ON p.id = pa.id_pessoa
         LEFT JOIN orientacoes_agg oa ON p.id = oa.id_pessoa
@@ -82,7 +87,12 @@ def sync_postgres_to_chroma(collection):
     professors_df['qualis_score'] = professors_df['qualis_score'].astype(float)
     professors_df['id_pessoa'] = professors_df['id_pessoa'].astype(str)
     
-    professors_df['research_text'] = professors_df['research_text'].replace('', 'Sem descrição de pesquisa detalhada.')
+    # CORREÇÃO: Garante que nulos/vazios do Python também sejam tratados
+    professors_df['research_text'] = professors_df['research_text'].fillna('Sem descrição de pesquisa detalhada')
+    professors_df['research_text'] = professors_df['research_text'].replace('', 'Sem descrição de pesquisa detalhada')
+    
+    professors_df['areas'] = professors_df['areas'].fillna('Não informado')
+    professors_df['areas'] = professors_df['areas'].replace('', 'Não informado')
 
     documents = professors_df['research_text'].tolist()
     metadatas = professors_df.drop(columns=['research_text']).to_dict(orient='records')
