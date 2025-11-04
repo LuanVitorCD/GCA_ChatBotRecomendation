@@ -63,6 +63,20 @@ def set_custom_theme():
             .stButton > button[kind="primary"] { background-color: #007bff; color: white; }
             .stButton > button[kind="primary"]:hover { background-color: #0056b3; color: white; }
 
+            /* Checkbox */
+            .st-av {
+                background-color: rgb(75, 103, 255) !important;
+                }
+            
+            /* Resto */
+            .st-ci, .st-ch, .st-cg, .st-cf {
+                border-color: rgb(0, 3, 174) !important;
+                }
+
+            .st-emotion-cache-11xx4re {
+                background-color: rgb(75, 103, 255) !important;
+                }
+
             /* Barra de progresso */
             .stProgress > div > div > div > div { background-color: #007bff; }
 
@@ -84,7 +98,7 @@ def set_custom_theme():
             div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(2) { background-color: #444; }
             /* Slider track (parte preenchida) e bolinha */
             div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(3),
-            div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(4) { background-color: #007bff; }
+            div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(4) { background-color: #4b67ff !important; }
         </style>
     """, unsafe_allow_html=True)
 
