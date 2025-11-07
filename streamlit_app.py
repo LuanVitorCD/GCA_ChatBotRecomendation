@@ -136,7 +136,7 @@ def set_custom_theme():
 # --------------------------------------------------------------------------- #
 def display_results_as_cards(results, publication_limit):
     """ Exibe os resultados em um layout de cards mais elaborado e com dropdown de publicações. """
-    st.header("⭐ Orientadores Recomendados (Moderno)")
+    st.header("Orientadores Recomendados (Moderno)")
     st.markdown("Abaixo estão os professores com maior afinidade com seu tema de pesquisa.")
 
     num_cols = min(len(results), 3)
@@ -190,12 +190,12 @@ def display_results_as_cards(results, publication_limit):
 st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
 set_custom_theme()
 
-st.title("RecomendaProf")
+st.title("🎓 RecomendaProf")
 st.markdown("Encontre o orientador ideal para sua pesquisa. Nosso sistema combina a **similaridade semântica** do seu projeto com as **métricas de produtividade acadêmica** dos professores.")
 st.divider()
 
 with st.sidebar:
-    st.title("Configurações")
+    st.title("⚙️ Configurações")
     
     # --- NOVO: SELETOR DE MOTOR ---
     st.subheader("Motor de Recomendação")
@@ -221,7 +221,7 @@ with st.sidebar:
 
 
     st.divider()
-    st.title("Gerência de Dados")
+    st.title("🔄 Gerência de Dados")
     st.write("Sincronize os dados do PostgreSQL para o cache local (ChromaDB).")
     if st.button("Sincronizar Dados", use_container_width=True):
         if collection is None:
@@ -245,7 +245,7 @@ student_text_details = st.text_area(
     height=120, help="Descreva seu projeto com mais detalhes para uma recomendação mais precisa."
 )
 
-if st.button("Encontrar Orientador Ideal", use_container_width=True, type="primary"):
+if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="primary"):
     if not student_area and not student_text_details:
         st.error("Por favor, descreva sua área de pesquisa.")
     else:
@@ -287,7 +287,7 @@ if st.button("Encontrar Orientador Ideal", use_container_width=True, type="prima
                 try:
                     legacy_results_str = recommend_legacy_clustering(full_query, only_doctors)
                     st.divider()
-                    st.header("⭐ Orientadores Recomendados (Legado)")
+                    st.header("Orientadores Recomendados (Legado)")
                     st.text_area("Resultados", legacy_results_str, height=300)
                 
                 except ImportError:
