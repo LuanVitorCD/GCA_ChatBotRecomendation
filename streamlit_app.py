@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import traceback
 import chromadb
-import re # Para limpar o texto da nuvem de palavras
 
 # --- Importando a lógica de recomendação e utilitários ---
 from recommend_chroma import recommend_hybrid_with_chroma
@@ -12,10 +11,6 @@ from db_utils import get_publications_by_professor_id
 
 # --- IMPORTANDO O NOVO MOTOR LEGADO ---
 from recommend_legacy import recommend_legacy_clustering
-
-# --- NOVOS IMPORTS VISUAIS ---
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 
 # --------------------------------------------------------------------------- #
 #                      SETUP DO CHROMA DB (CACHE)                             #
@@ -41,66 +36,99 @@ collection = get_chroma_collection()
 #             FUNÇÃO PARA APLICAR TEMA CUSTOMIZADO (PRETO E AZUL)             #
 # --------------------------------------------------------------------------- #
 def set_custom_theme():
-    # ... (código do tema inalterado) ...
     st.markdown("""
         <style>
-            /* Cor do texto principal */
-            .stApp, .stMarkdown, .stTextInput > label, .stTextArea > label, .stSlider > label, .stCheckbox > label {
-                color: #e0e0e0;
+            /* -------------------- GERAL -------------------- */
+            .stApp, .stMarkdown, label, p, span {
+                color: #E0E0E0 !important;
             }
-            h1, h2, h3, h4, h5, h6 { color: #ffffff; }
-
-            /* Estilo dos inputs de texto */
-            .stTextInput > div > div > input, .stTextArea > div > div > textarea {
-                background-color: #262730; color: #e0e0e0; border: 1px solid #444; border-radius: 0.5rem;
+            h1, h2, h3, h4, h5, h6 {
+                color: #FFFFFF !important;
             }
-            
-            /* Botões */
-            .stButton > button {
-                border-radius: 0.5rem; border: 1px solid #007bff; background-color: transparent; color: #007bff; transition: all 0.2s ease;
+
+            /* -------------------- CHECKBOX -------------------- */
+            div[data-baseweb="checkbox"] svg {
+                fill: #4b67ff !important;      /* marca interna */
+                stroke: #4b67ff !important;
             }
-            .stButton > button:hover { background-color: #007bff; color: white; }
-            .stButton > button[kind="primary"] { background-color: #007bff; color: white; }
-            .stButton > button[kind="primary"]:hover { background-color: #0056b3; color: white; }
-
-            /* Checkbox */
-            .st-av {
-                background-color: rgb(75, 103, 255) !important;
-                }
-            
-            /* Resto */
-            .st-ci, .st-ch, .st-cg, .st-cf {
-                border-color: rgb(0, 3, 174) !important;
-                }
-
-            .st-emotion-cache-11xx4re {
-                background-color: rgb(75, 103, 255) !important;
-                }
-
-            /* Barra de progresso */
-            .stProgress > div > div > div > div { background-color: #007bff; }
-
-            /* Cards de resultado */
-            [data-testid="stContainer"] {
-                 background-color: #1c1e24; border: 1px solid #444; border-radius: 0.75rem;
+            div[data-baseweb="checkbox"] > div:first-child {
+                border: 2px solid #4b67ff !important; /* borda do quadrado */
+                border-radius: 4px !important;
             }
-            
-            /* Métricas dentro dos cards */
-            [data-testid="stMetric"] {
-                background-color: #262730; border: 1px solid #444; border-radius: 0.5rem; padding: 0.5rem;
-            }
-            
-            /* Expanders (dropdowns) */
-            .stExpander { border-color: #444 !important; background-color: #262730; border-radius: 0.5rem; }
 
-            /* --- NOVOS ESTILOS PARA SIDEBAR --- */
-            /* Slider track (barra de fundo) */
-            div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(2) { background-color: #444; }
-            /* Slider track (parte preenchida) e bolinha */
-            div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(3),
-            div[data-testid="stSlider"] div[data-baseweb="slider"] > div:nth-child(4) { background-color: #4b67ff !important; }
+            /* -------------------- RADIO -------------------- */
+            .stApp label[data-baseweb="radio"] > div > label[data-baseweb="radio"] > div {
+                background-color: #4b67ff !important;
+                border: 2px solid #4b67ff !important;
+            }
+
+            /* -------------------- TOGGLE -------------------- */
+            div[data-testid="stToggle"] div[role="switch"] {
+                background-color: #4b67ff !important;  /* cor do fundo ligado */
+                border: 1px solid #4b67ff !important;
+            }
+            div[data-testid="stToggle"] div[role="switch"] div {
+                background-color: white !important;    /* bolinha branca */
+            }
+
+            /* -------------------- SLIDER -------------------- */
+            div[data-baseweb="slider"] > div:nth-child(2) {
+                background-color: #333 !important;     /* trilha vazia */
+            }
+            div[data-baseweb="slider"] > div:nth-child(3),
+            div[data-baseweb="slider"] > div:nth-child(4) {
+                background-color: #4b67ff !important;  /* trilha cheia */
+            }
+            div[data-baseweb="slider"] [role="slider"] {
+                background-color: #4b67ff !important;  /* knob (ponto) */
+                border: 2px solid #4b67ff !important;
+                box-shadow: 0 0 6px #4b67ff !important;
+            }
+
+            /* -------------------- BOTÕES -------------------- */
+            button {
+                border-radius: 6px !important;
+                border: 1px solid #4b67ff !important;
+                background-color: transparent !important;
+                color: #4b67ff !important;
+                transition: all 0.2s ease-in-out !important;
+            }
+            button:hover {
+                background-color: #4b67ff !important;
+                color: white !important;
+            }
+            button[kind="primary"] {
+                background-color: #4b67ff !important;
+                color: white !important;
+            }
+            button[kind="primary"]:hover {
+                background-color: #3b55cc !important;
+            }
+
+            /* -------------------- PROGRESS BAR -------------------- */
+            .stProgress > div > div > div > div {
+                background-color: #4b67ff !important;
+            }
+
+            /* -------------------- SIDEBAR -------------------- */
+            section[data-testid="stSidebar"] {
+                background-color: #14161A !important;
+                border-right: 1px solid #2A2A3C !important;
+            }
+
+            /* -------------------- CONTAINERS -------------------- */
+            [data-testid="stContainer"], .stContainer {
+                background-color: #1E1E2E !important;
+                border: 1px solid #333 !important;
+                border-radius: 10px !important;
+            }
         </style>
     """, unsafe_allow_html=True)
+
+
+
+
+
 
 
 # --------------------------------------------------------------------------- #
@@ -157,47 +185,6 @@ def display_results_as_cards(results, publication_limit):
                         st.info("Nenhuma publicação encontrada.")
 
 # --------------------------------------------------------------------------- #
-#               NOVA FUNÇÃO: GERAR NUVEM DE PALAVRAS                          #
-# --------------------------------------------------------------------------- #
-def create_word_cloud(text):
-    """Gera e exibe uma nuvem de palavras a partir do texto de consulta."""
-    # Limpeza simples do texto (remove pontuação e palavras curtas)
-    text = re.sub(r'[^\w\s]', '', text).lower()
-    words = [word for word in text.split() if len(word) > 2]
-    cleaned_text = " ".join(words)
-
-    if not cleaned_text:
-        st.info("Digite mais termos para gerar a nuvem de palavras.")
-        return
-
-    try:
-        # Gerar a nuvem de palavras
-        wordcloud = WordCloud(
-            width=800, 
-            height=200, # Altura reduzida
-            background_color='#0E1117', # Cor de fundo do Streamlit
-            colormap='viridis', 
-            collocations=False,
-            min_font_size=10,
-            color_func=lambda *args, **kwargs: (255,255,255) # Texto branco
-        ).generate(cleaned_text)
-
-        # Exibir a nuvem de palavras
-        fig, ax = plt.subplots(figsize=(10, 3)) # figsize reduzido
-        ax.imshow(wordcloud, interpolation='bilinear')
-        ax.axis('off')
-        plt.gca().set_facecolor('#0E1117') # Fundo do plot
-        fig.patch.set_facecolor('#0E1117') # Fundo da figura
-        
-        st.pyplot(fig, use_container_width=True)
-        
-    except ValueError:
-        st.warning("Não foi possível gerar a nuvem de palavras (talvez o texto seja muito curto).")
-    except Exception as e:
-        st.error(f"Erro ao gerar nuvem de palavras: {e}")
-
-
-# --------------------------------------------------------------------------- #
 #                      INTERFACE PRINCIPAL DO STREAMLIT                       #
 # --------------------------------------------------------------------------- #
 st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
@@ -208,7 +195,7 @@ st.markdown("Encontre o orientador ideal para sua pesquisa. Nosso sistema combin
 st.divider()
 
 with st.sidebar:
-    st.title("⚙️ Configurações")
+    st.title("Configurações")
     
     # --- NOVO: SELETOR DE MOTOR ---
     st.subheader("Motor de Recomendação")
@@ -234,7 +221,7 @@ with st.sidebar:
 
 
     st.divider()
-    st.title("🔄 Gerenciamento de Dados")
+    st.title("Gerência de Dados")
     st.write("Sincronize os dados do PostgreSQL para o cache local (ChromaDB).")
     if st.button("Sincronizar Dados", use_container_width=True):
         if collection is None:
@@ -258,16 +245,18 @@ student_text_details = st.text_area(
     height=120, help="Descreva seu projeto com mais detalhes para uma recomendação mais precisa."
 )
 
-if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="primary"):
+if st.button("Encontrar Orientador Ideal", use_container_width=True, type="primary"):
     if not student_area and not student_text_details:
         st.error("Por favor, descreva sua área de pesquisa.")
     else:
         full_query = f"{student_area}. {student_text_details}"
 
-        # --- NUVEM DE PALAVRAS ---
-        st.subheader("☁️ Nuvem de Termos da Busca")
-        create_word_cloud(full_query)
+        # --- MODIFICADO: Confirmação dos Termos de Busca ---
+        with st.container(border=True):
+            st.markdown(f"**Buscando recomendações com base em:**")
+            st.caption(full_query)
         st.divider()
+
 
         # --- LÓGICA DE SELEÇÃO DE MOTOR ---
         if recommendation_mode == "Moderno (Vetorial)":
@@ -309,4 +298,3 @@ if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="p
                     st.error("Ocorreu um erro durante a recomendação legada.")
                     with st.expander("Detalhes do Erro"):
                         st.code(traceback.format_exc())
-

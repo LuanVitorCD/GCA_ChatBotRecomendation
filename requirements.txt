@@ -2,11 +2,6 @@ streamlit
 pandas
 numpy
 scikit-learn
-beautifulsoup4
-lxml
 chromadb
 psycopg2-binary
-requests
-matplotlib
-wordcloud
 spacy
