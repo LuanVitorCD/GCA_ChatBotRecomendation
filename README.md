@@ -13,7 +13,7 @@ A aplicação foi reimplementada com **Streamlit** para interface gráfica, **Ch
 ---
 
 ## 🖼️ Imagem do projeto rodando
-![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_realdata_modernengine.png)
+![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_realdata_chatinterface.png)
 
 ---
 
