@@ -1,4 +1,4 @@
-# streamlit_app.py - Interface principal com Streamlit (versão com UI aprimorada)
+# streamlit_app.py - Interface principal com Streamlit
 import streamlit as st
 import pandas as pd
 import traceback
@@ -9,12 +9,9 @@ from recommend_chroma import recommend_hybrid_with_chroma
 from chroma_utils import sync_postgres_to_chroma
 from db_utils import get_publications_by_professor_id
 
-# --- IMPORTANDO O NOVO MOTOR LEGADO ---
+# --- MOTOR LEGADO ---
 from recommend_legacy import recommend_legacy_clustering
 
-# --------------------------------------------------------------------------- #
-#                      SETUP DO CHROMA DB (CACHE)                             #
-# --------------------------------------------------------------------------- #
 @st.cache_resource
 def get_chroma_collection():
     """
@@ -31,10 +28,6 @@ def get_chroma_collection():
 
 collection = get_chroma_collection()
 
-
-# --------------------------------------------------------------------------- #
-#             FUNÇÃO PARA APLICAR TEMA CUSTOMIZADO (PRETO E AZUL)             #
-# --------------------------------------------------------------------------- #
 def set_custom_theme():
     st.markdown("""
         <style>
@@ -125,19 +118,42 @@ def set_custom_theme():
         </style>
     """, unsafe_allow_html=True)
 
+def parse_legacy_results(legacy_string: str) -> list:
+    """
+    Converte a string de resultado do motor legado em uma lista de
+    dicionários compatível com os cards.
+    """
+    results = []
+    if "Nenhum orientador" in legacy_string:
+        return []
+    
+    lines = legacy_string.strip().split('\n\n')
+    for line in lines:
+        parts = line.split(' - Rating: ')
+        if len(parts) == 2:
+            nome = parts[0]
+            score = float(parts[1])
+            results.append({
+                'nome': nome,
+                'hybrid_score': score,
+                # ID Fictício para o botão de feedback.
+                # Cuidado: Nomes duplicados podem causar colisões de chave.
+                'id': f"legacy_{nome.replace(' ', '_').lower()}",
+                'metadata': {}, # Motor legado não fornece metadados ricos
+                'semantic_similarity': 0.0,
+                'norm_productivity_score': score # No legado, o score é só produtividade
+            })
+    return results
 
-
-
-
-
-
-# --------------------------------------------------------------------------- #
-#       FUNÇÃO PARA EXIBIR OS CARDS DE RESULTADO (NOVO DESIGN)                #
-# --------------------------------------------------------------------------- #
-def display_results_as_cards(results, publication_limit):
-    """ Exibe os resultados em um layout de cards mais elaborado e com dropdown de publicações. """
-    st.header("Orientadores Recomendados (Moderno)")
-    st.markdown("Abaixo estão os professores com maior afinidade com seu tema de pesquisa.")
+def display_results_as_cards(results: list, publication_limit: int, engine: str = "Moderno", query_text: str = ""):
+    """ 
+    Exibe os resultados em cards, com:
+    1. Badge do motor (legado/moderno)
+    2. XAI (Explainable AI) para o motor moderno
+    3. Botões de Feedback
+    4. Compatibilidade com dados do motor legado
+    """
+    st.markdown(f"**Resultados (Motor {engine}):**")
 
     num_cols = min(len(results), 3)
     cols = st.columns(num_cols)
@@ -146,58 +162,86 @@ def display_results_as_cards(results, publication_limit):
         with cols[i % num_cols]:
             with st.container(border=True):
                 st.subheader(f"{r['nome']}")
+                st.caption(f"Gerado por: Motor {engine}") # Badge
+                
                 st.markdown(f"**Score de Afinidade: {r['hybrid_score']:.2f}**")
-                st.progress(float(r['hybrid_score']))
+                
+                if engine == "Moderno":
+                    st.progress(float(r['hybrid_score']))
+                
+                # --- Explainable AI (XAI) ---
+                if engine == "Moderno":
+                    similarity = r.get('semantic_similarity', 0)
+                    productivity = r.get('norm_productivity_score', 0)
+                    
+                    if similarity > 0.6 and productivity > 0.6:
+                        st.success("Recomendação forte: alta afinidade de pesquisa e excelente produtividade.")
+                    elif similarity > 0.6:
+                        st.info("Recomendação com alta afinidade de pesquisa (tema muito parecido).")
+                    elif productivity > 0.6:
+                        st.info("Recomendação com alta produtividade (muitas publicações e orientações).")
+
                 st.divider()
 
                 col1, col2 = st.columns(2)
-                col1.metric(label="Similaridade", value=f"{r['semantic_similarity']:.2f}")
-                col2.metric(label="Produtividade", value=f"{r['norm_productivity_score']:.2f}")
+                # Usar .get() garante compatibilidade com o legado
+                col1.metric(label="Similaridade", value=f"{r.get('semantic_similarity', 0.0):.2f}")
+                col2.metric(label="Produtividade", value=f"{r.get('norm_productivity_score', 0.0):.2f}")
 
-                meta = r['metadata']
-
-                with st.expander("Ver mais detalhes"):
-                    # CORREÇÃO: Usa 'Não informado' como padrão se a área estiver vazia
-                    areas_display = meta.get('areas') if meta.get('areas') else "Não informado"
-                    st.markdown(f"**Áreas de Conhecimento:** `{areas_display}`")
+                # --- Paridade Visual (Lógica de Detalhes) ---
+                if engine == "Moderno":
+                    meta = r.get('metadata', {})
                     
-                    status_doutorado = "Sim" if meta.get('tem_doutorado') else "Não"
-                    st.markdown(f"**Vinculado a Doutorado:** {status_doutorado}")
-                    st.json({
-                        "Publicações (total)": meta.get('publicacoes_count', 0),
-                        "Orientações (total)": meta.get('orientacoes_count', 0),
-                        "Score Qualis (médio)": round(meta.get('qualis_score', 0), 2)
-                    })
-                
-                with st.expander("Ver publicações"):
-                    # A busca de publicações é específica do ChromaDB, 
-                    # então desabilitamos para o legado ou buscamos de forma diferente
-                    with st.spinner("Buscando publicações..."):
-                        publications, total_count = get_publications_by_professor_id(r['id'], limit=publication_limit)
-                    
-                    if publications:
-                        for pub in publications:
-                            st.markdown(f"- _{pub}_")
+                    with st.expander("Ver mais detalhes"):
+                        areas_display = meta.get('areas') if meta.get('areas') else "Não informado"
+                        st.markdown(f"**Áreas de Conhecimento:** `{areas_display}`")
                         
-                        if total_count > len(publications):
-                            st.info(f"Mostrando {len(publications)} de {total_count} publicações.")
-                    else:
-                        st.info("Nenhuma publicação encontrada.")
+                        status_doutorado = "Sim" if meta.get('tem_doutorado') else "Não"
+                        st.markdown(f"**Vinculado a Doutorado:** {status_doutorado}")
+                        st.json({
+                            "Publicações (total)": meta.get('publicacoes_count', 0),
+                            "Orientações (total)": meta.get('orientacoes_count', 0),
+                            "Score Qualis (médio)": round(meta.get('qualis_score', 0), 2)
+                        })
+                    
+                    with st.expander("Ver publicações"):
+                        with st.spinner("Buscando..."):
+                            publications, total_count = get_publications_by_professor_id(r['id'], limit=publication_limit)
+                        
+                        if publications:
+                            for pub in publications:
+                                st.markdown(f"- _{pub}_")
+                            if total_count > len(publications):
+                                st.info(f"Mostrando {len(publications)} de {total_count} publicações.")
+                        else:
+                            st.info("Nenhuma publicação encontrada.")
+                else:
+                    st.info("Detalhes e publicações não estão disponíveis para o motor legado.")
+                
+                # --- Loop de Feedback ---
+                st.divider()
+                col_up, col_down = st.columns(2)
+                
+                # Chaves únicas para os botões
+                key_up = f"up_{r['id']}_{query_text}"
+                key_down = f"down_{r['id']}_{query_text}"
+                
+                if col_up.button("👍 Relevante", use_container_width=True, key=key_up):
+                    st.toast(f"Feedback salvo: {r['nome']}!", icon="✅")
+                    # Em um app real, aqui você salvaria no DB/log:
+                    # log_feedback(r['id'], 'up', engine, query_text)
+                
+                if col_down.button("👎 Pouco relevante", use_container_width=True, key=key_down):
+                    st.toast(f"Feedback salvo: {r['nome']}.", icon="❌")
+                    # log_feedback(r['id'], 'down', engine, query_text)
 
-# --------------------------------------------------------------------------- #
-#                      INTERFACE PRINCIPAL DO STREAMLIT                       #
-# --------------------------------------------------------------------------- #
 st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
 set_custom_theme()
 
-st.title("🎓 RecomendaProf")
-st.markdown("Encontre o orientador ideal para sua pesquisa. Nosso sistema combina a **similaridade semântica** do seu projeto com as **métricas de produtividade acadêmica** dos professores.")
-st.divider()
-
+# --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Configurações")
     
-    # --- NOVO: SELETOR DE MOTOR ---
     st.subheader("Motor de Recomendação")
     recommendation_mode = st.radio(
         "Selecione o motor para a recomendação:",
@@ -210,7 +254,6 @@ with st.sidebar:
     only_doctors = st.checkbox("Apenas de programas com Doutorado", value=True)
     top_k_slider = st.slider("Número de recomendações", min_value=3, max_value=9, value=3)
     
-    # Slider de publicações com opção "Todas"
     max_pubs_slider = st.slider("Máx. de publicações por orientador", min_value=1, max_value=51, value=5)
     if max_pubs_slider == 51:
         max_pubs_limit = None
@@ -219,6 +262,11 @@ with st.sidebar:
         max_pubs_limit = max_pubs_slider
         st.caption(f"Exibindo: Até {max_pubs_slider} publicações")
 
+    # Botão para limpar chat
+    st.divider()
+    if st.button("🗑️ Limpar Histórico", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
     st.divider()
     st.title("🔄 Gerência de Dados")
@@ -236,28 +284,40 @@ with st.sidebar:
                 st.error("Falha na sincronização.")
                 st.toast("Erro ao sincronizar.", icon="❌")
 
-st.header("🔍 Descreva sua Pesquisa")
-student_area = st.text_input(
-    "**Palavras-chave:**", "Redes neurais para imagens médicas", help="Termos principais da sua pesquisa."
-)
-student_text_details = st.text_area(
-    "**Detalhes do Projeto:**", "Meu foco é usar deep learning para detectar anomalias em ressonância magnética.",
-    height=120, help="Descreva seu projeto com mais detalhes para uma recomendação mais precisa."
-)
+# --- ÁREA PRINCIPAL (UI DE CHATBOT) ---
+st.title("🎓 RecomendaProf")
+st.markdown("Encontre o orientador ideal para sua pesquisa. Esta interface de chat irá guiar você.")
+st.divider()
 
-if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="primary"):
-    if not student_area and not student_text_details:
-        st.error("Por favor, descreva sua área de pesquisa.")
-    else:
-        full_query = f"{student_area}. {student_text_details}"
+# Inicializa o histórico de chat no session_state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-        # --- MODIFICADO: Confirmação dos Termos de Busca ---
-        with st.container(border=True):
-            st.markdown(f"**Buscando recomendações com base em:**")
-            st.caption(full_query)
-        st.divider()
+# Exibe as mensagens do histórico
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        # Lógica para re-exibir os cards ou texto
+        if message["type"] == "cards":
+            display_results_as_cards(
+                message["content"], 
+                max_pubs_limit, 
+                message["engine"], 
+                message["query"]
+            )
+        else:
+            st.markdown(message["content"])
 
-
+# Input do usuário (st.chat_input)
+if prompt := st.chat_input("Descreva sua área de pesquisa (ex: 'deep learning para imagens médicas')"):
+    # Adiciona a mensagem do usuário ao histórico e exibe
+    st.session_state.messages.append({"role": "user", "type": "text", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    # Processa a recomendação como "assistant"
+    with st.chat_message("assistant"):
+        full_query = prompt
+        
         # --- LÓGICA DE SELEÇÃO DE MOTOR ---
         if recommendation_mode == "Moderno (Vetorial)":
             if collection is None:
@@ -271,29 +331,44 @@ if st.button("✨ Encontrar Orientador Ideal", use_container_width=True, type="p
                             student_query=full_query, collection=collection,
                             only_doctors=only_doctors, top_k=top_k_slider
                         )
-                        st.divider()
+                        
                         if results:
-                            display_results_as_cards(results, max_pubs_limit)
+                            # Exibe os cards e salva no histórico
+                            display_results_as_cards(results, max_pubs_limit, "Moderno", full_query)
+                            st.session_state.messages.append({
+                                "role": "assistant", "type": "cards", 
+                                "content": results, "engine": "Moderno", "query": full_query
+                            })
                         else:
                             st.warning("Nenhum orientador com afinidade suficiente foi encontrado.")
+                            st.session_state.messages.append({"role": "assistant", "type": "text", "content": "Nenhum orientador com afinidade suficiente foi encontrado."})
+                        
                     except Exception:
                         st.error("Ocorreu um erro durante a recomendação moderna.")
                         with st.expander("Detalhes do Erro"):
                             st.code(traceback.format_exc())
         
         elif recommendation_mode == "Legado (Clustering)":
-            st.info("Executando o motor legado (Clustering + SQL). Isso pode demorar vários segundos...")
+            st.info("Executando o motor legado (Clustering + SQL). Isso pode demorar...")
             with st.spinner("Buscando, clusterizando e ranqueando (Motor Legado)..."):
                 try:
                     legacy_results_str = recommend_legacy_clustering(full_query, only_doctors)
-                    st.divider()
-                    st.header("Orientadores Recomendados (Legado)")
-                    st.text_area("Resultados", legacy_results_str, height=300)
+                    legacy_results_list = parse_legacy_results(legacy_results_str)
+                    
+                    if legacy_results_list:
+                        # Exibe os cards e salva no histórico
+                        display_results_as_cards(legacy_results_list, max_pubs_limit, "Legado", full_query)
+                        st.session_state.messages.append({
+                            "role": "assistant", "type": "cards", 
+                            "content": legacy_results_list, "engine": "Legado", "query": full_query
+                        })
+                    else:
+                        st.warning("Nenhum orientador foi encontrado pelo motor legado.")
+                        st.session_state.messages.append({"role": "assistant", "type": "text", "content": "Nenhum orientador foi encontrado pelo motor legado."})
                 
                 except ImportError:
                     st.error("Erro: O motor legado requer 'spacy'.")
-                    st.code("pip install spacy")
-                    st.code("python -m spacy download pt_core_news_md")
+                    st.code("pip install spacy && python -m spacy download pt_core_news_md")
                 except Exception:
                     st.error("Ocorreu um erro durante a recomendação legada.")
                     with st.expander("Detalhes do Erro"):
