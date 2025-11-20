@@ -1,375 +1,391 @@
-# streamlit_app.py - Interface principal com Streamlit
+# streamlit_app.py - Interface Final com Pivô para Motor Legado, LLM e Sync de Dados
 import streamlit as st
 import pandas as pd
 import traceback
+import time
+import requests
+import json
+import random
 import chromadb
 
-# --- Importando a lógica de recomendação e utilitários ---
-from recommend_chroma import recommend_hybrid_with_chroma
-from chroma_utils import sync_postgres_to_chroma
+# Lógica de recomendação
+from recommend_legacy import recommend_legacy_clustering
 from db_utils import get_publications_by_professor_id
 
-# --- MOTOR LEGADO ---
-from recommend_legacy import recommend_legacy_clustering
+# Utilitários do ChromaDB
+from chroma_utils import sync_postgres_to_chroma
 
+# Configuração da página
+st.set_page_config(page_title="RecomendaProf - Tese", layout="wide", initial_sidebar_state="expanded")
+
+
+
+# Função para aplicar tema customizado CSS
+def set_custom_theme():
+    st.markdown("""
+        <style>
+            /* Cores Gerais */
+            .stApp, .stMarkdown, label, p, span, h1, h2, h3, h4, h5, h6 { 
+                color: #E0E0E0 !important; 
+            }
+            
+            /* Botões Primários (Favoritar/Ação) */
+            button[kind="primary"] {
+                background-color: #4b67ff !important;
+                color: white !important;
+                border: none;
+                transition: 0.3s;
+            }
+            button[kind="primary"]:hover {
+                background-color: #3b55cc !important;
+                box-shadow: 0 0 10px rgba(75, 103, 255, 0.5);
+            }
+
+            /* Alinhamento de Botões na Coluna Direita */
+            div[data-testid="column"] button {
+                width: 100%;
+                margin-bottom: 5px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+            /* Ajuste sutil para separar o conteúdo */
+            hr { margin: 1.5em 0; border-color: #333; }
+        </style>
+    """, unsafe_allow_html=True)
+
+set_custom_theme()
+
+
+
+# Setup para sincronização com ChromaDB
 @st.cache_resource
 def get_chroma_collection():
-    """
-    Inicializa o cliente PERSISTENTE do ChromaDB e retorna a coleção.
-    """
+    """ Inicializa o cliente para permitir a sincronização dos dados """
     try:
         client = chromadb.PersistentClient(path="chroma_db_cache")
         collection = client.get_or_create_collection(name="orientadores_academicos")
-        print("Instância do ChromaDB e coleção carregadas com sucesso.")
         return collection
     except Exception as e:
-        st.error(f"Não foi possível inicializar o ChromaDB: {e}")
+        print(f"Aviso: ChromaDB não inicializado (apenas necessário para sync): {e}")
         return None
 
 collection = get_chroma_collection()
 
-def set_custom_theme():
-    st.markdown("""
-        <style>
-            /* -------------------- GERAL -------------------- */
-            .stApp, .stMarkdown, label, p, span {
-                color: #E0E0E0 !important;
-            }
-            h1, h2, h3, h4, h5, h6 {
-                color: #FFFFFF !important;
-            }
 
-            /* -------------------- CHECKBOX -------------------- */
-            div[data-baseweb="checkbox"] svg {
-                fill: #4b67ff !important;      /* marca interna */
-                stroke: #4b67ff !important;
-            }
-            div[data-baseweb="checkbox"] > div:first-child {
-                border: 2px solid #4b67ff !important; /* borda do quadrado */
-                border-radius: 4px !important;
-            }
 
-            /* -------------------- RADIO -------------------- */
-            .stApp label[data-baseweb="radio"] > div > label[data-baseweb="radio"] > div {
-                background-color: #4b67ff !important;
-                border: 2px solid #4b67ff !important;
-            }
+# Gerenciamento de estados
+if 'favorites' not in st.session_state:
+    st.session_state.favorites = {} 
+if 'blacklist' not in st.session_state:
+    st.session_state.blacklist = {} 
+if 'search_history' not in st.session_state:
+    st.session_state.search_history = []
+if 'current_results' not in st.session_state:
+    st.session_state.current_results = []
+if 'refined_query' not in st.session_state:
+    st.session_state.refined_query = ""
+if 'view_mode' not in st.session_state:
+    st.session_state.view_mode = "search" 
+if 'selected_prof' not in st.session_state:
+    st.session_state.selected_prof = None
 
-            /* -------------------- TOGGLE -------------------- */
-            div[data-testid="stToggle"] div[role="switch"] {
-                background-color: #4b67ff !important;  /* cor do fundo ligado */
-                border: 1px solid #4b67ff !important;
-            }
-            div[data-testid="stToggle"] div[role="switch"] div {
-                background-color: white !important;    /* bolinha branca */
-            }
 
-            /* -------------------- SLIDER -------------------- */
-            div[data-baseweb="slider"] > div:nth-child(2) {
-                background-color: #333 !important;     /* trilha vazia */
-            }
-            div[data-baseweb="slider"] > div:nth-child(3),
-            div[data-baseweb="slider"] > div:nth-child(4) {
-                background-color: #4b67ff !important;  /* trilha cheia */
-            }
-            div[data-baseweb="slider"] [role="slider"] {
-                background-color: #4b67ff !important;  /* knob (ponto) */
-                border: 2px solid #4b67ff !important;
-                box-shadow: 0 0 6px #4b67ff !important;
-            }
 
-            /* -------------------- BOTÕES -------------------- */
-            button {
-                border-radius: 6px !important;
-                border: 1px solid #4b67ff !important;
-                background-color: transparent !important;
-                color: #4b67ff !important;
-                transition: all 0.2s ease-in-out !important;
-            }
-            button:hover {
-                background-color: #4b67ff !important;
-                color: white !important;
-            }
-            button[kind="primary"] {
-                background-color: #4b67ff !important;
-                color: white !important;
-            }
-            button[kind="primary"]:hover {
-                background-color: #3b55cc !important;
-            }
+# Integração com LLMs
+def call_ollama(prompt, model="mistral"):
+    url = "http://localhost:11434/api/generate"
+    payload = {
+        "model": model, "prompt": prompt, "stream": False,
+        "options": {"temperature": 0.7} 
+    }
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        return response.json().get("response", "")
+    except Exception as e:
+        return f"Erro ao conectar com Ollama: {e}"
 
-            /* -------------------- PROGRESS BAR -------------------- */
-            .stProgress > div > div > div > div {
-                background-color: #4b67ff !important;
-            }
+def call_gemini(prompt, api_key):
+    return "Integração Gemini ainda não configurada."
 
-            /* -------------------- SIDEBAR -------------------- */
-            section[data-testid="stSidebar"] {
-                background-color: #14161A !important;
-                border-right: 1px solid #2A2A3C !important;
-            }
+def llm_refine_query(user_text, provider, model_name, api_key=None):
+    system_prompt = (
+        f"Atue como um assistente acadêmico especialista. "
+        f"O usuário vai descrever um tema de pesquisa. "
+        f"Converta isso para 3 a 5 palavras-chave técnicas acadêmicas (Lattes). "
+        f"Retorne APENAS as palavras separadas por espaço.\n\n"
+        f"Texto: '{user_text}'"
+    )
+    
+    if provider == "Simulação":
+        refinement = user_text
+        keywords = ["pesquisa", "desenvolvimento", "tecnologia", "análise", "estudo"]
+        if len(user_text.split()) < 4:
+            refinement += " " + " ".join(keywords[:2])
+        return refinement
+        
+    elif provider == "Local (Ollama)":
+        return call_ollama(system_prompt, model=model_name)
+    elif provider == "Gemini (API)":
+        return call_gemini(system_prompt, api_key)
+    return user_text
 
-            /* -------------------- CONTAINERS -------------------- */
-            [data-testid="stContainer"], .stContainer {
-                background-color: #1E1E2E !important;
-                border: 1px solid #333 !important;
-                border-radius: 10px !important;
-            }
-        </style>
-    """, unsafe_allow_html=True)
+def llm_explain_recommendation(prof_name, score, user_query, provider, model_name, api_key=None):
+    prompt = (
+        f"Escreva uma justificativa curta (máximo 2 frases) explicando por que o professor '{prof_name}' "
+        f"é uma boa recomendação para o tema '{user_query}'. "
+        f"O algoritmo deu um score de {score:.2f}. Seja profissional."
+    )
+    
+    if provider == "Simulação":
+        templates = [
+            f"Com base na busca por '{user_query}', o algoritmo identificou **{prof_name}** como forte correspondência (Score: {score:.2f}).",
+            f"A trajetória acadêmica de **{prof_name}** apresenta alta sinergia com o tema '{user_query}', refletida no índice {score:.2f}.",
+            f"Para o tema '{user_query}', **{prof_name}** destaca-se pela produtividade e experiência na área (Índice: {score:.2f})."
+        ]
+        random.seed(prof_name + user_query) 
+        return random.choice(templates)
+        
+    elif provider == "Local (Ollama)":
+        return call_ollama(prompt, model=model_name)
+    return "Explicação indisponível."
 
-def parse_legacy_results(legacy_string: str) -> list:
-    """
-    Converte a string de resultado do motor legado em uma lista de
-    dicionários compatível com os cards.
-    """
+
+
+# Parser e lógicas auxiliares
+def parse_legacy_results(legacy_string):
     results = []
     if "Nenhum orientador" in legacy_string:
         return []
-    
     lines = legacy_string.strip().split('\n\n')
     for line in lines:
         parts = line.split(' - Rating: ')
         if len(parts) == 2:
             nome = parts[0]
-            score = float(parts[1])
-            results.append({
-                'nome': nome,
-                'hybrid_score': score,
-                # ID Fictício para o botão de feedback.
-                # Cuidado: Nomes duplicados podem causar colisões de chave.
-                'id': f"legacy_{nome.replace(' ', '_').lower()}",
-                'metadata': {}, # Motor legado não fornece metadados ricos
-                'semantic_similarity': 0.0,
-                'norm_productivity_score': score # No legado, o score é só produtividade
-            })
+            try: score = float(parts[1])
+            except: score = 0.0
+            id_ficticio = nome.replace(" ", "_").lower()
+            
+            if id_ficticio not in st.session_state.blacklist:
+                results.append({'nome': nome, 'hybrid_score': score, 'id': id_ficticio})
     return results
 
-def display_results_as_cards(results: list, publication_limit: int, engine: str = "Moderno", query_text: str = ""):
-    """ 
-    Exibe os resultados em cards, com:
-    1. Badge do motor (legado/moderno)
-    2. XAI (Explainable AI) para o motor moderno
-    3. Botões de Feedback
-    4. Compatibilidade com dados do motor legado
-    """
-    st.markdown(f"**Resultados (Motor {engine}):**")
-
-    num_cols = min(len(results), 3)
-    cols = st.columns(num_cols)
-
-    for i, r in enumerate(results):
-        with cols[i % num_cols]:
-            with st.container(border=True):
-                st.subheader(f"{r['nome']}")
-                st.caption(f"Gerado por: Motor {engine}") # Badge
-                
-                st.markdown(f"**Score de Afinidade: {r['hybrid_score']:.2f}**")
-                
-                if engine == "Moderno":
-                    st.progress(float(r['hybrid_score']))
-                
-                # --- Explainable AI (XAI) ---
-                if engine == "Moderno":
-                    similarity = r.get('semantic_similarity', 0)
-                    productivity = r.get('norm_productivity_score', 0)
-                    
-                    if similarity > 0.6 and productivity > 0.6:
-                        st.success("Recomendação forte: alta afinidade de pesquisa e excelente produtividade.")
-                    elif similarity > 0.6:
-                        st.info("Recomendação com alta afinidade de pesquisa (tema muito parecido).")
-                    elif productivity > 0.6:
-                        st.info("Recomendação com alta produtividade (muitas publicações e orientações).")
-
-                st.divider()
-
-                col1, col2 = st.columns(2)
-                # Usar .get() garante compatibilidade com o legado
-                col1.metric(label="Similaridade", value=f"{r.get('semantic_similarity', 0.0):.2f}")
-                col2.metric(label="Produtividade", value=f"{r.get('norm_productivity_score', 0.0):.2f}")
-
-                # --- Paridade Visual (Lógica de Detalhes) ---
-                if engine == "Moderno":
-                    meta = r.get('metadata', {})
-                    
-                    with st.expander("Ver mais detalhes"):
-                        areas_display = meta.get('areas') if meta.get('areas') else "Não informado"
-                        st.markdown(f"**Áreas de Conhecimento:** `{areas_display}`")
-                        
-                        status_doutorado = "Sim" if meta.get('tem_doutorado') else "Não"
-                        st.markdown(f"**Vinculado a Doutorado:** {status_doutorado}")
-                        st.json({
-                            "Publicações (total)": meta.get('publicacoes_count', 0),
-                            "Orientações (total)": meta.get('orientacoes_count', 0),
-                            "Score Qualis (médio)": round(meta.get('qualis_score', 0), 2)
-                        })
-                    
-                    with st.expander("Ver publicações"):
-                        with st.spinner("Buscando..."):
-                            publications, total_count = get_publications_by_professor_id(r['id'], limit=publication_limit)
-                        
-                        if publications:
-                            for pub in publications:
-                                st.markdown(f"- _{pub}_")
-                            if total_count > len(publications):
-                                st.info(f"Mostrando {len(publications)} de {total_count} publicações.")
-                        else:
-                            st.info("Nenhuma publicação encontrada.")
-                else:
-                    st.info("Detalhes e publicações não estão disponíveis para o motor legado.")
-                
-                # --- Loop de Feedback ---
-                st.divider()
-                col_up, col_down = st.columns(2)
-                
-                # Chaves únicas para os botões
-                key_up = f"up_{r['id']}_{query_text}"
-                key_down = f"down_{r['id']}_{query_text}"
-                
-                if col_up.button("👍 Relevante", use_container_width=True, key=key_up):
-                    st.toast(f"Feedback salvo: {r['nome']}!", icon="✅")
-                    # Em um app real, aqui você salvaria no DB/log:
-                    # log_feedback(r['id'], 'up', engine, query_text)
-                
-                if col_down.button("👎 Pouco relevante", use_container_width=True, key=key_down):
-                    st.toast(f"Feedback salvo: {r['nome']}.", icon="❌")
-                    # log_feedback(r['id'], 'down', engine, query_text)
-
-st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
-set_custom_theme()
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.title("⚙️ Configurações")
-    
-    st.subheader("Motor de Recomendação")
-    recommendation_mode = st.radio(
-        "Selecione o motor para a recomendação:",
-        ("Moderno (Vetorial)", "Legado (Clustering)"),
-        help="Vetorial: Usa ChromaDB para busca semântica (rápido). Clustering: Usa a lógica original de clustering e SQL (lento)."
-    )
-    st.divider()
-    
-    st.subheader("Filtros")
-    only_doctors = st.checkbox("Apenas de programas com Doutorado", value=True)
-    top_k_slider = st.slider("Número de recomendações", min_value=3, max_value=9, value=3)
-    
-    max_pubs_slider = st.slider("Máx. de publicações por orientador", min_value=1, max_value=51, value=5)
-    if max_pubs_slider == 51:
-        max_pubs_limit = None
-        st.caption("Exibindo: Todas as publicações")
+def toggle_favorite(prof):
+    prof_id = prof['id']
+    if prof_id in st.session_state.favorites:
+        del st.session_state.favorites[prof_id]
+        st.toast(f"Removido dos favoritos.", icon="🗑️")
     else:
-        max_pubs_limit = max_pubs_slider
-        st.caption(f"Exibindo: Até {max_pubs_slider} publicações")
+        if prof_id in st.session_state.blacklist:
+            del st.session_state.blacklist[prof_id]
+        st.session_state.favorites[prof_id] = prof 
+        st.toast(f"Favoritado!", icon="⭐")
 
-    # Botão para limpar chat
+def toggle_blacklist(prof):
+    prof_id = prof['id']
+    if prof_id in st.session_state.blacklist:
+        del st.session_state.blacklist[prof_id]
+        st.toast(f"Restaurado.", icon="👁️")
+    else:
+        if prof_id in st.session_state.favorites:
+            del st.session_state.favorites[prof_id]
+        st.session_state.blacklist[prof_id] = prof
+        st.toast(f"Ocultado.", icon="🚫")
+        st.session_state.current_results = [p for p in st.session_state.current_results if p['id'] != prof_id]
+
+def clear_search():
+    st.session_state.current_results = []
+    st.session_state.refined_query = ""
+    st.session_state.view_mode = "search"
+    st.rerun()
+
+def view_professor_details(prof):
+    st.session_state.selected_prof = prof
+    st.session_state.view_mode = "single_view"
+    st.rerun()
+
+def back_to_search():
+    st.session_state.view_mode = "search"
+    st.session_state.selected_prof = None
+    st.rerun()
+
+
+
+# INTERFACE LATERAL #
+with st.sidebar:
+    st.title("🎓 RecomendaProf")
+    st.caption("Baseado na Tese de Doutorado de Radi Melo Martins")
+    
     st.divider()
-    if st.button("🗑️ Limpar Histórico", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+    st.subheader("🧠 Configuração da IA")
+    llm_provider = st.selectbox("Provedor de Inteligência:", ["Simulação", "Local (Ollama)", "Gemini (API)"])
+    
+    ollama_model = "mistral"
+    api_key = None
+    if llm_provider == "Local (Ollama)":
+        ollama_model = st.text_input("Modelo Ollama:", value="mistral")
+    elif llm_provider == "Gemini (API)":
+        api_key = st.text_input("API Key do Google:", type="password")
 
     st.divider()
-    st.title("🔄 Gerência de Dados")
-    st.write("Sincronize os dados do PostgreSQL para o cache local (ChromaDB).")
-    if st.button("Sincronizar Dados", use_container_width=True):
+    st.subheader("Filtros & Limites")
+    only_doctors = st.checkbox("Apenas Doutorado", value=True)
+    max_professors = st.slider("Máx. Professores", 1, 20, 5)
+    max_pubs_limit = st.slider("Máx. Publicações", 1, 10, 3)
+
+    st.divider()
+    
+    st.subheader(f"⭐ Favoritos ({len(st.session_state.favorites)})")
+    if st.session_state.favorites:
+        for fav_id, fav_data in list(st.session_state.favorites.items()):
+            c1, c2 = st.columns([4, 1])
+            if c1.button(fav_data['nome'], key=f"nav_fav_{fav_id}"):
+                view_professor_details(fav_data)
+            if c2.button("✕", key=f"rm_fav_{fav_id}"):
+                 del st.session_state.favorites[fav_id]
+                 st.rerun()
+    else:
+        st.caption("Nenhum favorito ainda.")
+
+    st.divider()
+    if st.session_state.blacklist:
+        with st.expander(f"🚫 Ocultados ({len(st.session_state.blacklist)})"):
+             for black_id, black_data in list(st.session_state.blacklist.items()):
+                c1, c2 = st.columns([4, 1])
+                c1.text(black_data['nome'])
+                if c2.button("↺", key=f"rst_{black_id}"):
+                    del st.session_state.blacklist[black_id]
+                    st.rerun()
+
+    # Botão para sincronizar dados entre BDs
+    st.divider()
+    st.markdown("### 🔄 Dados")
+    st.caption("Sincronização PostgreSQL -> ChromaDB (Opcional)")
+    if st.button("Sincronizar Banco", use_container_width=True):
         if collection is None:
             st.error("ChromaDB não inicializado.")
         else:
             try:
-                with st.spinner("Sincronizando..."):
+                with st.spinner("Lendo do PostgreSQL e vetorizando..."):
                     count = sync_postgres_to_chroma(collection)
-                st.success(f"{count} orientador(es) sincronizados!")
-                st.toast("Sincronização concluída!", icon="✅")
+                st.success(f"{count} perfis sincronizados com sucesso!")
             except Exception as e:
                 st.error("Falha na sincronização.")
-                st.toast("Erro ao sincronizar.", icon="❌")
+                st.code(str(e))
 
-# --- ÁREA PRINCIPAL (UI DE CHATBOT) ---
-st.title("🎓 RecomendaProf")
-st.markdown("Encontre o orientador ideal para sua pesquisa. Esta interface de chat irá guiar você.")
-st.divider()
 
-# Inicializa o histórico de chat no session_state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
-# Exibe as mensagens do histórico
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        # Lógica para re-exibir os cards ou texto
-        if message["type"] == "cards":
-            display_results_as_cards(
-                message["content"], 
-                max_pubs_limit, 
-                message["engine"], 
-                message["query"]
-            )
-        else:
-            st.markdown(message["content"])
+# INTERFACE PRINCIPAL #
+st.title("Encontre seu Orientador Ideal")
 
-# Input do usuário (st.chat_input)
-if prompt := st.chat_input("Descreva sua área de pesquisa (ex: 'deep learning para imagens médicas')"):
-    # Adiciona a mensagem do usuário ao histórico e exibe
-    st.session_state.messages.append({"role": "user", "type": "text", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# Detalhes
+if st.session_state.view_mode == "single_view" and st.session_state.selected_prof:
+    prof = st.session_state.selected_prof
     
-    # Processa a recomendação como "assistant"
-    with st.chat_message("assistant"):
-        full_query = prompt
+    if st.button("← Voltar para a busca"):
+        back_to_search()
         
-        # --- LÓGICA DE SELEÇÃO DE MOTOR ---
-        if recommendation_mode == "Moderno (Vetorial)":
-            if collection is None:
-                st.error("A conexão com o ChromaDB falhou. Verifique o console.")
-            elif collection.count() == 0:
-                st.warning("Nenhum orientador no cache. Sincronize os dados na barra lateral.")
-            else:
-                with st.spinner("Buscando e ranqueando (Motor Moderno)..."):
-                    try:
-                        results = recommend_hybrid_with_chroma(
-                            student_query=full_query, collection=collection,
-                            only_doctors=only_doctors, top_k=top_k_slider
-                        )
-                        
-                        if results:
-                            # Exibe os cards e salva no histórico
-                            display_results_as_cards(results, max_pubs_limit, "Moderno", full_query)
-                            st.session_state.messages.append({
-                                "role": "assistant", "type": "cards", 
-                                "content": results, "engine": "Moderno", "query": full_query
-                            })
-                        else:
-                            st.warning("Nenhum orientador com afinidade suficiente foi encontrado.")
-                            st.session_state.messages.append({"role": "assistant", "type": "text", "content": "Nenhum orientador com afinidade suficiente foi encontrado."})
-                        
-                    except Exception:
-                        st.error("Ocorreu um erro durante a recomendação moderna.")
-                        with st.expander("Detalhes do Erro"):
-                            st.code(traceback.format_exc())
+    with st.container(border=True):
+        st.header(prof['nome'])
+        st.caption(f"Índice de Recomendação: **{prof['hybrid_score']:.2f}**")
         
-        elif recommendation_mode == "Legado (Clustering)":
-            st.info("Executando o motor legado (Clustering + SQL). Isso pode demorar...")
-            with st.spinner("Buscando, clusterizando e ranqueando (Motor Legado)..."):
-                try:
-                    legacy_results_str = recommend_legacy_clustering(full_query, only_doctors)
-                    legacy_results_list = parse_legacy_results(legacy_results_str)
-                    
-                    if legacy_results_list:
-                        # Exibe os cards e salva no histórico
-                        display_results_as_cards(legacy_results_list, max_pubs_limit, "Legado", full_query)
-                        st.session_state.messages.append({
-                            "role": "assistant", "type": "cards", 
-                            "content": legacy_results_list, "engine": "Legado", "query": full_query
-                        })
-                    else:
-                        st.warning("Nenhum orientador foi encontrado pelo motor legado.")
-                        st.session_state.messages.append({"role": "assistant", "type": "text", "content": "Nenhum orientador foi encontrado pelo motor legado."})
+        query_context = st.session_state.refined_query if st.session_state.refined_query else "sua pesquisa"
+        explanation = llm_explain_recommendation(prof['nome'], prof['hybrid_score'], query_context, llm_provider, ollama_model, api_key)
+        st.info(explanation)
+        
+        st.subheader("Publicações Detalhadas")
+        pubs, total = get_publications_by_professor_id(prof['id'], limit=10)
+        if pubs:
+            st.write(f"Mostrando as 10 mais recentes de {total} encontradas:")
+            for p in pubs: st.markdown(f"- {p}")
+        else:
+            st.warning("Nenhuma publicação encontrada no banco de dados.")
+            
+    c1, c2 = st.columns(2)
+    is_fav = prof['id'] in st.session_state.favorites
+    if c1.button("★ Remover Favorito" if is_fav else "☆ Favoritar", key="det_fav", use_container_width=True, type="primary" if is_fav else "secondary"):
+        toggle_favorite(prof)
+        st.rerun()
+    if c2.button("🚫 Ocultar Professor", key="det_blk", use_container_width=True):
+        toggle_blacklist(prof)
+        back_to_search()
+
+
+
+# Modo de busca padrão
+else:
+    if st.session_state.search_history:
+        with st.expander("Ver histórico da conversa", expanded=False):
+            for msg in st.session_state.search_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Ex: Quero pesquisar sobre uso de machine learning na detecção de câncer..."):
+        st.session_state.search_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+
+        with st.status("🧠 Processando...", expanded=True) as status:
+            st.write(f"Refinando busca com {llm_provider}...")
+            refined_query = llm_refine_query(prompt, llm_provider, ollama_model, api_key)
+            st.session_state.refined_query = refined_query
+            st.write(f"🔍 Termos gerados: *'{refined_query}'*")
+            
+            try:
+                legacy_raw = recommend_legacy_clustering(refined_query, only_doctors)
+                parsed_results = parse_legacy_results(legacy_raw)
+                st.session_state.current_results = parsed_results
+                status.update(label="Busca concluída!", state="complete", expanded=False)
+            except Exception as e:
+                status.update(label="Erro na busca", state="error")
+                st.error(f"Erro no motor legado: {e}")
+                st.session_state.current_results = []
+
+    if st.session_state.current_results:
+        col_res_1, col_res_2 = st.columns([5, 1])
+        results_to_show = st.session_state.current_results[:max_professors]
+        col_res_1.subheader(f"Resultados ({len(results_to_show)})")
+        if col_res_2.button("Limpar Busca", type="secondary"):
+            clear_search()
+
+        st.markdown(f"Baseado nos termos: *{st.session_state.refined_query}*")
+        
+        for prof in results_to_show:
+            is_fav = prof['id'] in st.session_state.favorites
+            fav_label = "★ Favorito" if is_fav else "☆ Favoritar"
+            fav_type = "primary" if is_fav else "secondary"
+
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
                 
-                except ImportError:
-                    st.error("Erro: O motor legado requer 'spacy'.")
-                    st.code("pip install spacy && python -m spacy download pt_core_news_md")
-                except Exception:
-                    st.error("Ocorreu um erro durante a recomendação legada.")
-                    with st.expander("Detalhes do Erro"):
-                        st.code(traceback.format_exc())
+                with c1:
+                    st.markdown(f"### {prof['nome']}")
+                    st.caption(f"Índice de Recomendação: **{prof['hybrid_score']:.2f}**")
+                    
+                    if 'refined_query' in st.session_state:
+                         explanation = llm_explain_recommendation(prof['nome'], prof['hybrid_score'], st.session_state.refined_query, llm_provider, ollama_model, api_key)
+                         st.info(explanation)
+
+                    with st.expander("Ver publicações recentes"):
+                        pubs, _ = get_publications_by_professor_id(prof['id'], limit=max_pubs_limit)
+                        if pubs:
+                            for p in pubs: st.text(f"• {p}")
+                        else:
+                            st.caption("Nenhuma publicação encontrada.")
+
+                with c2:
+                    st.write("") 
+                    if st.button(fav_label, key=f"btn_fav_{prof['id']}", type=fav_type, use_container_width=True):
+                        toggle_favorite(prof)
+                        st.rerun()
+                    
+                    if st.button("🚫 Ocultar", key=f"btn_blk_{prof['id']}", use_container_width=True):
+                        toggle_blacklist(prof)
+                        st.rerun()
+                    
+                    if st.button("📄 Detalhes", key=f"btn_det_{prof['id']}", use_container_width=True):
+                        view_professor_details(prof)
+
+    elif st.session_state.search_history and not st.session_state.current_results:
+         st.info("Faça uma nova busca para ver resultados.")
