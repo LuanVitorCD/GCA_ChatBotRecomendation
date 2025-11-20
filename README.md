@@ -1,7 +1,7 @@
 # 🎓 RecomendaProf
 
-**RecomendaProf** é um sistema de **recomendação inteligente de orientadores de mestrado/doutorado**, desenvolvido em Python.  
-Ele combina **busca semântica vetorial (ChromaDB)** com métricas de produtividade acadêmica, oferecendo recomendações equilibradas entre **afinidade temática** e **experiência científica**.
+**RecomendaProf** é um sistema inteligente de recomendação de orientadores de pós-graduação (Mestrado e Doutorado), desenvolvido como implementação prática de uma Tese de Doutorado em Ciência da Computação.
+O sistema utiliza uma abordagem híbrida que combina **Processamento de Linguagem Natural (PLN), Clustering (Agrupamento)** e **Modelagem Matemática** para identificar e ranquear docentes com base na afinidade temática e produtividade acadêmica.
 
 ---
 
@@ -13,36 +13,42 @@ A aplicação foi reimplementada com **Streamlit** para interface gráfica, **Ch
 ---
 
 ## 🖼️ Imagem do projeto rodando
-![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_realdata_chatinterface.png)
+![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_llmassisted_chatresults.png)
+
+---
+
+## ✨ Principais Funcionalidades
+- Motor de Recomendação Validado: Implementação fiel do algoritmo de clustering (Birch/KMeans) e ranking ponderado descrito na metodologia da tese.
+
+- Assistente de IA (Cérebro Duplo):
+   - Refinamento de Busca: Transforma a linguagem natural do aluno (ex: "quero estudar cura do câncer") em termos técnicos acadêmicos otimizados para a busca Lattes.
+   - Explicações Personalizadas: Gera justificativas em linguagem natural explicando por que aquele professor foi recomendado para você.
+   - Suporte a Múltiplos Provedores: Funciona com Ollama (Local/Offline) para privacidade total ou Google Gemini via API.
+
+- Interface Conversacional (Chatbot): Uma experiência de chat fluida para refinamento progressivo da pesquisa.
+
+- Gestão de Candidatos:
+   - ⭐ Favoritos: Salve perfis promissores para análise posterior;
+   - 🚫 Blacklist: Oculte professores que não atendem aos seus critérios, limpando os resultados futuros;
+   - 📄 Visualização Focada: Modo de detalhes para análise aprofundada de publicações.
 
 ---
 
 ## 🧠 Como Funciona a Recomendação
 
-O **Score de Afinidade** é calculado a partir de dois pilares:
+O sistema opera em um pipeline de 3 estágios:
 
-1. **Busca Semântica (ChromaDB)**
-   - O texto do projeto do aluno é convertido em um embedding vetorial.
-   - O sistema identifica professores cujas publicações têm maior similaridade semântica.
+1. **Filtragem & Clustering**
+   - O input do aluno é processado por uma LLM (Llama 3, Mistral ou Gemini) que extrai o "núcleo semântico" da pesquisa.
 
 2. **Produtividade Acadêmica**
-   - Métricas como número de publicações, orientações e Qualis médio são normalizadas.
-   - Gera-se um *score* de produtividade combinado com a similaridade semântica.
-
-O resultado é um **Score Híbrido**, equilibrando relevância temática e produtividade científica.
-
----
-
-## 🚀 Funcionalidades
-
-- Extração automática de dados do **Currículo Lattes**.
-- Criação de datasets a partir das informações processadas.
-- Ranqueamento de professores por relevância.
-- Chatbot interativo para consulta de orientadores.
-- Sincronização entre **PostgreSQL** e **ChromaDB**.
-- Alternância entre motores de recomendação:
-  - `recommend_chroma.py` → moderno (busca vetorial)
-  - `recommend_legacy.py` → legado (clustering)
+   - O texto refinado é cruzado com a base de dados PostgreSQL;
+   - Algoritmos de Clustering (Birch) agrupam professores com perfis de publicação similares;
+   - Um segundo nível de K-Means refina o grupo para encontrar a vizinhança mais próxima.
+3. **Ranking Matemático**
+   - Um índice de recomendação (Score) é calculado para cada candidato do cluster final;
+   - **Fórmula:** IR = (0,3 * Publicacoes) + (0,3 * Orientacoes) + (0,4 * Qualis)
+   - O resultado é normalizado pelo tempo de doutoramento, garantindo justiça entre professores seniores e juniores.
 
 ---
 
@@ -51,30 +57,21 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 ```bash
 .
 ├── streamlit_app.py        # Interface principal em Streamlit
-├── recommend_chroma.py     # Motor de recomendação moderno (ChromaDB)
 ├── recommend_legacy.py     # Motor legado (SQL + clustering)
 ├── chroma_utils.py         # Sincronização PostgreSQL → ChromaDB
 ├── db_utils.py             # Conexão e utilidades do banco PostgreSQL
 ├── requirements.txt        # Dependências do projeto
 │
-├── legacy/
-│   ├── ingest.py
-│   ├── dataset_generator.py
-│   └── recommend.py
-│
-├── legacy_java/
-│   ├── ProcessadorLattesCompleto.java
-│   ├── ProcessadorQualis.java
-│   └── GeradorDeDatasets.java
+├── data/
+│   └── mestrado - 02_21 09_05   # Arquivo backup dump de um banco de dados PostgreSQL com dados prontos para usar no App
 │
 ├── sql/
 │   └── create_tables.sql   # Estrutura de tabelas no PostgreSQL
 │
-├── utils/
-│   └── servidor-unificado.py   # Backend legado (Flask)
-│
-└── assets/
-    └── exemplo.png
+├── legacy/   # Pasta com códigos legados
+├── legacy_java/   # Pasta com scripts Java relacionados a curriculos lattes e quallis
+├── utils/    # Pasta com Backend legado (Flask)
+└── assets/   # Pasta com todas as imagens do projeto
 ```
 
 ---
@@ -89,11 +86,17 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 - **Pandas** — manipulação de dados
 - **Scikit-learn** — cálculo de métricas e pontuações
 - **Psycopg2** — conexão com PostgreSQL
+- **Ollama** — LLM Local
 
 ---
 
 ## ⚙️ Instalação
+Pré-requisitos
+- Python 3.10+
+- PostgreSQL (com a base lattes importada)
+- (Opcional) Ollama instalado localmente para IA offline de usos ilimitados
 
+1. Configuração do Ambiente
 ```bash
 git clone https://github.com/LuanVitorCD/GCA_ChatBotRecomendation.git
 cd GCA_ChatBotRecomendation
@@ -106,23 +109,29 @@ pip install -r requirements.txt
 python -m spacy download pt_core_news_md
 ```
 
----
+2. Banco de Dados (PostgreSQL)
+   1. Crie um banco de dados no PostgreSQL;
+   2. Restaure o backup lcoalizado na pasta "data/" (ou execute o script dentro da pasta "sql/" chamado "create_tables.sql" para começar do zero);
+   3. Configure suas credenciais no arquivo "db_utils.py".
 
-## ▶️ Execução
-
-### Modo Real (PostgreSQL + ChromaDB)
-1. Crie as tabelas usando `sql/create_tables.sql`
-2. Configure as credenciais no `db_utils.py`
-3. Rode a aplicação:
+3. Configuração da IA (Ollama) - Opcional
+Para usar o modo local (gratuito e privado):
+   1. Instale o [Ollama](https://ollama.com/);
+   2. No terminal, baixe um modelo leve (ex: Mistral);
    ```bash
-   streamlit run streamlit_app.py
+   ollama pull mistral
    ```
-4. No app, use o menu lateral para **sincronizar PostgreSQL → ChromaDB**
-5. Digite sua área de interesse (ex: “Visão Computacional”) e clique em **Recomendar**
+   3. Mantenha o servidor Ollama rodando (ollama serve).
+
+4. Executando o App
+```bash
+streamlit run streamlit_app.py
+```
 
 ---
 
 ## 👩‍💻 Autoria
 
-Projeto de pesquisa em desenvolvimento contínuo.  
-A lógica do modelo híbrido em **Scikit-learn** é fixa, enquanto os módulos auxiliares são reimplementados em Python para maior flexibilidade e integração moderna.
+Este projeto é a implementação computacional da Tese de Doutorado de **Radi Melo Martins**.
+Desenvolvido e mantido por **Luan Vitor C. D.**
+
