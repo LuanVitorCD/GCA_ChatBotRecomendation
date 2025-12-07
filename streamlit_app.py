@@ -255,7 +255,7 @@ with st.sidebar:
         # Normalização visual da soma dos pesos
         total_w = w_area + w_exp + w_prod + w_efi + w_colab + w_pesq + w_qual
         if total_w == 0: total_w = 1 # Evita divisão por zero
-        st.progress(min(total_w / 3, 1.0)) # Visual apenas
+        st.progress(min(total_w / 7, 1.0)) # Visual apenas (indo até 7 para levar em consideração o valor máximo de todas as variáveis)
         if abs(total_w - 1.0) > 0.01:
             st.caption(f"Soma atual: {total_w:.1f} (Ideal: 1.0)")
 
