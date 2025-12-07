@@ -1,48 +1,55 @@
 # 🎓 RecomendaProf
 
 **RecomendaProf** é um sistema de **recomendação inteligente de orientadores de mestrado/doutorado**, desenvolvido em Python.  
-Ele combina **busca semântica vetorial (ChromaDB)** com métricas de produtividade acadêmica, oferecendo recomendações equilibradas entre **afinidade temática** e **experiência científica**.
+Ele combina **busca semântica via clusterização** com métricas de produtividade acadêmica, oferecendo recomendações equilibradas entre **afinidade temática** e **experiência científica**.
 
 ---
 
 ## 💡 Visão Geral
 
 O sistema utiliza dados extraídos do **Currículo Lattes**, além de métricas de impacto (DOI, Impact Factor, CiteScore).  
-A aplicação foi reimplementada com **Streamlit** para interface gráfica, **ChromaDB** como banco vetorial e integração com **PostgreSQL**.
+A aplicação foi reimplementada com **Streamlit** para interface gráfica, **SQLite** como banco de dados (para facilidade de distribuição) e integração com LLMs para refinamento de busca.
 
 ---
 
 ## 🖼️ Imagem do projeto rodando
-![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_realdata_chatinterface.png)
+![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_customvariables_results.png)
 
 ---
 
 ## 🧠 Como Funciona a Recomendação
 
-O **Score de Afinidade** é calculado a partir de dois pilares:
+O **Score de Afinidade** é calculado a partir de um pipeline de 3 estágios:
 
-1. **Busca Semântica (ChromaDB)**
-   - O texto do projeto do aluno é convertido em um embedding vetorial.
-   - O sistema identifica professores cujas publicações têm maior similaridade semântica.
+1. **Filtragem e Clusterização (IA)**
+   - O texto do projeto do aluno é refinado e lematizado;
+   - Algoritmos de clustering (Birch e KMeans) agrupam docentes semanticamente alinhados à pesquisa.
 
-2. **Produtividade Acadêmica**
-   - Métricas como número de publicações, orientações e Qualis médio são normalizadas.
-   - Gera-se um *score* de produtividade combinado com a similaridade semântica.
+2. **Cálculo Multifatorial (6 variáveis)**
+   - Para os candidatos filtrados, o sistema calcula scores normalizados em 6 dimensões:
+      - **Área** (Aderência temática);
+      - **Experiência** (Volume de orientações);
+      - **Eficiência** (Taxa de conclusão);
+      - **Produção** (Volume bibliográfico);
+      - **Colaboração** (Redes de coautoria/bancas);
+      - **Pesquisa** (Projetos).
 
-O resultado é um **Score Híbrido**, equilibrando relevância temática e produtividade científica.
+![Variáveis usadas na recomendação](assets/variables_used.png)
+
+3. **Ranking Final**
+- O Índice de Recomendação ($IR$) é a soma ponderada dessas variáveis, com pesos ajustáveis pelo usuário.
+
 
 ---
 
 ## 🚀 Funcionalidades
 
-- Extração automática de dados do **Currículo Lattes**.
-- Criação de datasets a partir das informações processadas.
-- Ranqueamento de professores por relevância.
-- Chatbot interativo para consulta de orientadores.
-- Sincronização entre **PostgreSQL** e **ChromaDB**.
-- Alternância entre motores de recomendação:
-  - `recommend_chroma.py` → moderno (busca vetorial)
-  - `recommend_legacy.py` → legado (clustering)
+- Extração e processamento de dados do Currículo Lattes;
+- Chatbot Inteligente que refina a busca do aluno usando LLMs (Local ou Nuvem);
+- Pesos Personalizáveis: O aluno define o que é mais importante (ex: focar em produção ou em experiência);
+- Explicabilidade: Cada recomendação vem com uma justificativa gerada por IA;
+- Sistema de Favoritos e Ocultação de candidatos;
+- Banco de dados SQLite portátil, sem necessidade de instalação de servidores complexos.
 
 ---
 
@@ -51,30 +58,19 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 ```bash
 .
 ├── streamlit_app.py        # Interface principal em Streamlit  
-├── recommend_legacy.py     # Motor legado (SQL + clustering)
-├── db_utils.py             # Conexão e utilidades do banco SQLite
 ├── requirements.txt        # Dependências do projeto
+├── .gitignore              # Arquivo git que diz quais arquivos ignorar enviar para versionamento
+├── data.zip                # Pasta com os dados, basta extrair
 │
-├── legacy/
-│   ├── ingest.py
-│   ├── dataset_generator.py
-│   ├── chroma_utils.py       # Sincronização PostgreSQL → ChromaDB
-│   ├── recommend_chroma.py   # Motor de recomendação moderno (ChromaDB)
-│   └── recommend.py
-│
-├── legacy_java/
-│   ├── ProcessadorLattesCompleto.java
-│   ├── ProcessadorQualis.java
-│   └── GeradorDeDatasets.java
-│
-├── sql/
-│   └── create_tables.sql   # Estrutura de tabelas no PostgreSQL
+├── data/
+│   └── base_recomendacao.db   # Aparecerá pós extração do ".zip", é um arquivo banco de dados SQLite com dados já inseridos
 │
 ├── utils/
-│   └── servidor-unificado.py   # Backend legado (Flask)
+│   ├──db_utils.py             # Conexão e utilidades do banco SQLite
+│   └── thesis_recommend.py    # Motor de recomendação (SQLite + k-means + clustering)
 │
 └── assets/
-    └── exemplo.png
+    └── example.png         # Pasta para guardar prints de versões do projeto (facilita na hora de mostra-los no README)
 ```
 
 ---
@@ -110,18 +106,23 @@ python -m spacy download pt_core_news_md
 ## ▶️ Execução
 
 ### Modo Real (SQLite)
-1. Extraia a pasta zipada com o .db `base_recomendacao.zip`
-2. Configure as credenciais no `db_utils.py`
+1. Extraia a pasta zipada com o .db `data.zip`;
+2. Configure na sidebar:
+   - (se selecionado no provedor `Nuvem (Gemini)`) as credenciais de API Gemini que utilizará;
+   ![Credenciais API](assets/example_geminiapi_key.png)
+
+   - (se selecionado no provedor `Local (Ollama)`) qual o modelo LLM rodando no Ollama que utilizará.
+   ![Credenciais API](assets/example_ollamalocal_model.png)
+   
 3. Rode a aplicação:
    ```bash
    streamlit run streamlit_app.py
    ```
-4. No app, use o menu lateral para **sincronizar PostgreSQL → ChromaDB**
-5. Digite sua área de interesse (ex: “Visão Computacional”) e clique em **Recomendar**
+4. Digite um prompt com sua área e interesses (ex: “Graduado em Ciência da Computação com interesse em pós focando em Modelagem Matemática e Machine Learning”) e clique em **Recomendar**.
 
 ---
 
 ## 👩‍💻 Autoria
 
 Projeto de pesquisa em desenvolvimento contínuo.  
-A lógica do modelo híbrido em **Scikit-learn** é fixa, enquanto os módulos auxiliares são reimplementados em Python para maior flexibilidade e integração moderna.
+A lógica do modelo da tese em **Scikit-learn** é fixa, enquanto os módulos auxiliares são reimplementados em Python para maior flexibilidade e integração moderna.
