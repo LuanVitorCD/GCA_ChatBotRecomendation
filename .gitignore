@@ -10,6 +10,7 @@ __pycache__/
 
 # Ignorar o cache local do ChromaDB
 chroma_db_cache/
+*.db
 
 # Arquivos de configuração de IDEs (exemplo para VSCode)
 .vscode/

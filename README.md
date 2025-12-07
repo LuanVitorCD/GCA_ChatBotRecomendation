@@ -50,16 +50,16 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 
 ```bash
 .
-├── streamlit_app.py        # Interface principal em Streamlit
-├── recommend_chroma.py     # Motor de recomendação moderno (ChromaDB)
+├── streamlit_app.py        # Interface principal em Streamlit  
 ├── recommend_legacy.py     # Motor legado (SQL + clustering)
-├── chroma_utils.py         # Sincronização PostgreSQL → ChromaDB
-├── db_utils.py             # Conexão e utilidades do banco PostgreSQL
+├── db_utils.py             # Conexão e utilidades do banco SQLite
 ├── requirements.txt        # Dependências do projeto
 │
 ├── legacy/
 │   ├── ingest.py
 │   ├── dataset_generator.py
+│   ├── chroma_utils.py       # Sincronização PostgreSQL → ChromaDB
+│   ├── recommend_chroma.py   # Motor de recomendação moderno (ChromaDB)
 │   └── recommend.py
 │
 ├── legacy_java/
@@ -83,12 +83,11 @@ O resultado é um **Score Híbrido**, equilibrando relevância temática e produ
 
 - **Python 3.10+**
 - **Streamlit** — interface web interativa
-- **ChromaDB** — banco vetorial para embeddings
-- **PostgreSQL** — banco relacional principal
+- **SQLite** — banco relacional principal
 - **spaCy** — processamento de linguagem natural
 - **Pandas** — manipulação de dados
 - **Scikit-learn** — cálculo de métricas e pontuações
-- **Psycopg2** — conexão com PostgreSQL
+- **SQLite3** — conexão com SQLite
 
 ---
 
@@ -110,8 +109,8 @@ python -m spacy download pt_core_news_md
 
 ## ▶️ Execução
 
-### Modo Real (PostgreSQL + ChromaDB)
-1. Crie as tabelas usando `sql/create_tables.sql`
+### Modo Real (SQLite)
+1. Extraia a pasta zipada com o .db `base_recomendacao.zip`
 2. Configure as credenciais no `db_utils.py`
 3. Rode a aplicação:
    ```bash
