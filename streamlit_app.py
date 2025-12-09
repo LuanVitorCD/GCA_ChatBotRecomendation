@@ -4,12 +4,16 @@ import requests
 import json
 import random
 import traceback
+import os
+
+# Desativa o handler de erro do Fortran para CTRL+C (Correção do erro 200)
+os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 
 # --- Importando lógica atualizada (Tese) ---
 from utils.thesis_recommend import thesis_recommendation_engine
 from utils.db_utils import get_publications_by_professor_id
 
-st.set_page_config(page_title="RecomendaProf - Tese", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="RecomendaProf", layout="wide", initial_sidebar_state="expanded")
 
 def set_custom_theme():
     # CSS aprimorado para layout responsivo e moderno
@@ -54,6 +58,20 @@ def set_custom_theme():
             
             /* Ajustes visuais gerais */
             hr { margin: 1.5em 0; border-color: #333; }
+            
+            /* Destaque para o contexto da Seção 6 */
+            .section-context {
+                background-color: #1e1e2e;
+                border-left: 4px solid #4b67ff;
+                padding: 15px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                font-size: 0.95rem;
+                line-height: 1.5;
+            }
+            .section-context strong {
+                color: #8faaff;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -133,7 +151,7 @@ def llm_refine_query(user_text, provider, model_name, api_key=None):
         f"Texto do usuário: '{user_text}'"
     )
     
-    if provider == "Simulação":
+    if provider == "Simulação (sem IA)":
         # Simulação melhorada que adiciona termos genéricos se for curto o prompt passado
         if len(user_text.split()) < 3: return user_text + " pesquisa desenvolvimento tecnologia"
         return user_text
@@ -227,7 +245,8 @@ def back_to_search():
 # --------------------------------------------------------------------------- #
 with st.sidebar:
     st.title("🎓 RecomendaProf")
-    st.caption("Sistema Baseado em Tese (SQLite)")
+    # Crédito à tese original
+    st.caption("Implementação do Modelo Matemático (Radi, 2025)")
     
     # --- MODO DE OPERAÇÃO ---
     help_modes = """
@@ -248,11 +267,17 @@ with st.sidebar:
         w_colab = st.slider("Colaboração (Redes)", 0.0, 1.0, 0.1, 0.1, help="Peso da coautoria e bancas.")
         w_pesq = st.slider("Pesquisa (Projetos)", 0.0, 1.0, 0.1, 0.1, help="Peso da participação em projetos.")
         
+        # --- BLOCO VISUAL DE REFINAMENTO HEURÍSTICO ---
+        st.divider()
+        st.markdown("**:test_tube: Refinamento Heurístico da Dimensão Produção**")
+        st.caption("Parâmetro **opcional** que atua como bonificador de qualidade (foco em A1/A2).")
+
         # Variável extra de qualidade (Qualis) - Ativa por padrão no modo otimizado
         default_qual = 0.1 if mode == "Padrão (Otimizado)" else 0.0
-        w_qual = st.slider("Qualis (Qualidade Extra)", 0.0, 1.0, default_qual, 0.1, help="Peso específico para qualidade A1/A2.")
+        w_qual = st.slider("Qualis (Qualidade Extra)", 0.0, 1.0, default_qual, 0.1, help="Refinamento heurístico: bonifica proporcionalmente publicações de alto impacto.")
 
         # Normalização visual da soma dos pesos
+        st.divider()
         total_w = w_area + w_exp + w_prod + w_efi + w_colab + w_pesq + w_qual
         if total_w == 0: total_w = 1 # Evita divisão por zero
         st.progress(min(total_w / 7, 1.0)) # Visual apenas (indo até 7 para levar em consideração o valor máximo de todas as variáveis)
@@ -269,7 +294,7 @@ with st.sidebar:
     
     # --- CONFIGURAÇÃO DE IA ---
     st.subheader("🧠 IA Auxiliar")
-    llm_provider = st.selectbox("Provedor:", ["Simulação", "Local (Ollama)", "Nuvem (Gemini)"])
+    llm_provider = st.selectbox("Provedor:", ["Simulação (sem IA)", "Local (Ollama)", "Nuvem (Gemini)"])
     
     ollama_model = "mistral"
     api_key = None
@@ -368,6 +393,13 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
 
 # --- MODO DE BUSCA (PADRÃO) ---
 else:
+    # Contexto da Seção 6 REFINADO
+    st.markdown("""
+        <div class="section-context">
+            Escolha entre os modos <strong>padrão (pesos equilibrados)</strong> ou <strong>avançado (pesos personalizáveis)</strong> no menu lateral e qual <strong>provedor IA</strong> prefere usar!
+        </div>
+    """, unsafe_allow_html=True)
+
     # Histórico de Chat
     if st.session_state.search_history:
         with st.expander("Ver histórico da conversa", expanded=False):
@@ -376,7 +408,7 @@ else:
                     st.markdown(msg["content"])
 
     # Input do Usuário
-    if prompt := st.chat_input("Ex: Pesquisar sobre Inteligência Artificial aplicada à saúde..."):
+    if prompt := st.chat_input("Ex: Sou um estudante de Ciência da Computação e para a minha pós, gostaria de um(a) orientador(a) com expertise em..."):
         
         st.session_state.search_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
