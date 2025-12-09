@@ -264,8 +264,13 @@ class Ranking(object):
                 'id': str(row['id']),
                 'hybrid_score': final_score,
                 'details': {
+                    # Scores Normalizados (Por ano/taxa) - Usados nos gráficos
                     'raw_prod': s_prod, 'raw_exp': s_exp, 'raw_qual': s_qual,
-                    'raw_efi': s_efi, 'raw_colab': s_colab
+                    'raw_efi': s_efi, 'raw_colab': s_colab, 'raw_pesq': s_pesq,
+                    # Contagens Absolutas (Para auditoria do usuário)
+                    'abs_prod': row['raw_prod'],
+                    'abs_exp': row['raw_exp'],
+                    'abs_qual': row['raw_qual']
                 }
             })
             
