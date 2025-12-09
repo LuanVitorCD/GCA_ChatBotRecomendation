@@ -112,16 +112,15 @@ if 'current_results' not in st.session_state: st.session_state.current_results =
 if 'refined_query' not in st.session_state: st.session_state.refined_query = ""
 if 'view_mode' not in st.session_state: st.session_state.view_mode = "search"
 if 'selected_prof' not in st.session_state: st.session_state.selected_prof = None
+# Armazena os pesos usados na última busca para a auditoria
+if 'last_weights' not in st.session_state: st.session_state.last_weights = {}
 
 # --- OTIMIZAÇÃO: Caching das Funções Pesadas ---
 # O Streamlit não recalculará isso se os parâmetros não mudarem.
 # 'ttl=3600' mantém o cache por 1 hora.
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_recommendation_engine(query, weights):
-    """ Wrapper com cache para o motor de recomendação (Tese). """
-    # Convertemos weights para frozenset para ser hashable pelo cache se necessário, 
-    # mas dicts puros funcionam no st.cache_data moderno.
+    # O cache precisa que 'weights' seja hashable. Dicionários normais funcionam no streamlit novo.
     return thesis_recommendation_engine(query, False, weights)
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -208,10 +207,10 @@ def toggle_favorite(prof):
 
 def toggle_blacklist(prof):
     """ Adiciona ou remove da lista de ocultos """
-    prof_id = prof['id']
-    if prof_id in st.session_state.blacklist:
-        del st.session_state.blacklist[prof_id]
-        st.toast(f"Restaurado.", icon="👁️")
+    pid = prof['id']
+    if pid in st.session_state.blacklist:
+        del st.session_state.blacklist[pid]
+        st.toast("Restaurado.", icon="👁️")
     else:
         # Se estava nos favoritos, remove de lá primeiro
         if pid in st.session_state.favorites: del st.session_state.favorites[pid]
@@ -234,24 +233,24 @@ with st.sidebar:
     Padrão (Otimizado): Usa pesos fixos equilibrados (Área: 0.2, Exp: 0.2, Prod: 0.2, Outros: 0.1).\n
     Avançado (6 Variáveis): Permite ajustar manualmente a importância de cada critério.
     """
-    mode = st.radio("Modo de Operação", ["Padrão (Otimizado)", "Avançado (6 Variáveis)"], 
-                    help=help_modes)
+    mode = st.radio("Modo de Operação", ["Padrão (Otimizado)", "Avançado (6 Variáveis)"], help=help_modes)
     
     # Pesos (Dicionário que será passado ao backend)
-    weights = {'area': 0.2, 'exp': 0.2, 'prod': 0.2, 'efi': 0.1, 'colab': 0.1, 'pesq': 0.1, 'qual': 0.1}
+    weights = {'area': 0.2, 'exp': 0.2, 'prod': 0.2, 'efi': 0.1, 'colab': 0.1, 'pesq': 0.1, 'qual': 0.0}
     
     if mode == "Avançado (6 Variáveis)":
         with st.expander("⚖️ Personalizar Pesos", expanded=True):
-            st.markdown("Ajuste a importância de cada critério no cálculo do Índice de Recomendação.")
-
-            weights['area'] = st.slider("Área (aderência)", 0.0, 1.0, 0.2, 0.1, help="Peso da compatibilidade temática.")
-            weights['exp'] = st.slider("Experiência (orientações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume de orientações.")
-            weights['prod'] = st.slider("Produção (publicações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume de artigos e livros.")
-            weights['efi'] = st.slider("Eficiência (taxa de conclusão)", 0.0, 1.0, 0.1, 0.1, help="Peso da taxa de sucesso nas orientações.")
-            weights['colab'] = st.slider("Colaboração (redes)", 0.0, 1.0, 0.1, 0.1, help="Peso da coautoria e bancas.")
-            weights['pesq'] = st.slider("Pesquisa (projetos)", 0.0, 1.0, 0.1, 0.1, help="Peso da participação em projetos.")
-            st.caption("🧪 Refinamento Heurístico (OPCIONAL):")
-            weights['qual'] = st.slider("Qualis (bônus)", 0.0, 1.0, 0.0, 0.1, help="Refinamento heurístico: bonifica proporcionalmente publicações de alto impacto.")
+            w_area = st.slider("Área", 0.0, 1.0, 0.2, 0.1)
+            w_exp = st.slider("Experiência", 0.0, 1.0, 0.2, 0.1)
+            w_prod = st.slider("Produção", 0.0, 1.0, 0.2, 0.1)
+            w_efi = st.slider("Eficiência", 0.0, 1.0, 0.1, 0.1)
+            w_colab = st.slider("Colaboração", 0.0, 1.0, 0.1, 0.1)
+            w_pesq = st.slider("Pesquisa", 0.0, 1.0, 0.1, 0.1)
+            
+            weights = {
+                'area': w_area, 'exp': w_exp, 'prod': w_prod, 
+                'efi': w_efi, 'colab': w_colab, 'pesq': w_pesq, 'qual': 0.0
+            }
 
             # --- WARNING DE SOMA DOS PESOS ---
             total_w = sum(weights.values())
@@ -296,7 +295,7 @@ with st.sidebar:
                 st.session_state.view_mode = "single_view"
                 st.rerun()
     
-    # Ocultados (Blacklist) - Dropdown solicitado
+    # Ocultados (Blacklist)
     if st.session_state.blacklist:
         st.divider()
         with st.expander(f"🚫 Ocultados ({len(st.session_state.blacklist)})"):
@@ -314,6 +313,7 @@ with st.sidebar:
 # --- VIEW 1: DETALHES DO PROFESSOR ---
 if st.session_state.view_mode == "single_view" and st.session_state.selected_prof:
     p = st.session_state.selected_prof
+    det = p.get('details', {})
     
     if st.button("← Voltar à Busca"):
         st.session_state.view_mode = "search"
@@ -328,28 +328,70 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
     st.markdown(f"### Score Geral: <span style='color:#4b67ff'>{p['hybrid_score']:.2f}</span>", unsafe_allow_html=True)
     st.progress(visual_score_norm)
     
-    # Explicação IA
+    # --- AUDITORIA DE CÁLCULO (Inserida abaixo das métricas grandes) ---
+    # Primeiro os stats grandes mantidos
+    
+    # Explicação IA (Mantida)
     query = st.session_state.refined_query or "pesquisa acadêmica"
     expl = llm_explain_recommendation(p['nome'], p['hybrid_score'], query, llm_provider, ollama_model, api_key)
     if expl: st.info(f"💡 **Análise IA:** {expl}")
 
     # Métricas Detalhadas (Grid com todas as variáveis)
-    st.subheader("📊 Breakdown das Dimensões (Tese)")
-    det = p.get('details', {})
+    st.subheader("📊 Resultado das Variáveis")
+    w_calc = st.session_state.last_weights if st.session_state.last_weights else weights
     
     # Linha 1: Variáveis principais de impacto
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🎯 Área", "1.0") # Fixo pois passou no filtro
-    c2.metric("🎓 Experiência", f"{det.get('raw_exp', 0):.2f}")
-    c3.metric("📚 Produção", f"{det.get('raw_prod', 0):.2f}")
-    c4.metric("⚡ Eficiência", f"{det.get('raw_efi', 0):.2f}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🎯 Área", f"{(1.0 * w_calc.get('area', 0.2)):.2f}")
+    c2.metric("🎓 Experiência", f"{(det.get('raw_exp', 0) * w_calc.get('exp', 0.2)):.2f}")
+    c3.metric("📚 Produção", f"{(det.get('raw_prod', 0) * w_calc.get('prod', 0.2)):.2f}")
+    
     
     # Linha 2: Variáveis secundárias e contexto
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("🤝 Colaboração", f"{det.get('raw_colab', 0):.2f}")
-    c6.metric("🔬 Pesquisa", f"{det.get('raw_pesq', det.get('raw_prod',0)*0.5):.2f}")
-    c7.metric("🌟 Qualis (Extra)", f"{det.get('raw_qual', 0):.2f}")
-    c8.empty()
+    c4, c5, c6 = st.columns(3)
+    c4.metric("⚡ Eficiência", f"{(det.get('raw_efi', 0) * w_calc.get('efi', 0.1)):.2f}")
+    c5.metric("🤝 Colaboração", f"{(det.get('raw_colab', 0) * w_calc.get('colab', 0.1)):.2f}")
+
+    val_pesq = det.get('raw_pesq', det.get('raw_prod', 0) * 0.5)
+    c6.metric("🔬 Pesquisa", f"{(val_pesq * w_calc.get('pesq', 0.1)):.2f}")
+
+    # Auditoria (Expanders)
+    with st.expander("🧮 Auditoria do Cálculo (Validar Pesos)", expanded=True):
+        st.markdown("Confira como o **Score Final** foi calculado multiplicando a nota de cada dimensão pelo peso escolhido.")
+        
+        # Recupera pesos usados (ou padrão se não tiver)
+        w_used = st.session_state.last_weights if st.session_state.last_weights else weights
+        
+        # Helper para linha da tabela
+        def audit_line(label, raw_val, weight_key):
+            w_val = w_used.get(weight_key, 0.0) # 0.0 se não existir
+            contrib = raw_val * w_val
+            st.markdown(
+                f"<div class='audit-row'>"
+                f"<span>{label}</span>"
+                f"<span>{raw_val:.2f} (Nota) x {w_val:.2f} (Peso) = <strong>{contrib:.2f}</strong></span>"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
+            return contrib
+
+        audit_line("🎯 Área", 1.0, 'area')
+        audit_line("🎓 Experiência", det.get('raw_exp', 0), 'exp')
+        audit_line("📚 Produção", det.get('raw_prod', 0), 'prod')
+        audit_line("⚡ Eficiência", det.get('raw_efi', 0), 'efi')
+        audit_line("🤝 Colaboração", det.get('raw_colab', 0), 'colab')
+        # Pesquisa (derivado se não existir)
+        val_pesq = det.get('raw_pesq', det.get('raw_prod', 0) * 0.5)
+        audit_line("🔬 Pesquisa", val_pesq, 'pesq')
+        
+        st.divider()
+        st.caption("Nota: As 'Notas' acima são normalizadas (ex: pontos por ano). Para ver contagens totais absolutas, veja a auditoria de dados brutos abaixo.")
+
+    # Auditoria de Dados Brutos (sem Qualis)
+    with st.expander("📂 Auditoria de Dados Brutos (Absolutos)"):
+        c_a, c_b = st.columns(2)
+        c_a.metric("Total de Orientações", f"{det.get('abs_exp', 'N/A')}")
+        c_b.metric("Pontos Totais de Prod.", f"{det.get('abs_prod', 'N/A')}")
 
     st.divider()
     st.subheader("Publicações Recentes")
@@ -394,6 +436,9 @@ else:
             st.session_state.refined_query = refined
             
             # 2. Busca (Com Cache)
+            # Salva os pesos usados nesta busca para a auditoria bater certo
+            st.session_state.last_weights = weights.copy()
+            
             st.write("Calculando scores multidimensionais...")
             try:
                 results = cached_recommendation_engine(refined, weights)
@@ -409,11 +454,11 @@ else:
     if st.session_state.current_results:
         st.divider()
         st.subheader(f"Resultados para: \n{st.session_state.refined_query}")
-        
-        # Encontra o maior score ATUAL para normalizar a barra de progresso (evita barra cheia sempre)
-        max_score_in_results = max([p['hybrid_score'] for p in st.session_state.current_results]) if st.session_state.current_results else 1.0
 
-        for prof in st.session_state.current_results[:5]: # Top 5
+        # Encontra o maior score ATUAL para normalizar a barra de progresso (evita barra cheia sempre)        
+        max_score = max([p['hybrid_score'] for p in st.session_state.current_results]) if st.session_state.current_results else 1.0
+
+        for prof in st.session_state.current_results[:5]: # Top 5 resultados
             is_fav = prof['id'] in st.session_state.favorites
             
             # Card Container
@@ -424,14 +469,15 @@ else:
                     st.markdown(f"### {prof['nome']}")
                     
                     # Barra de Score Relativa ao Máximo da Busca Atual
-                    relative_score = prof['hybrid_score'] / max_score_in_results if max_score_in_results > 0 else 0
-                    st.progress(relative_score)
-                    st.caption(f"Score: {prof['hybrid_score']:.2f}")
+                    rel_score = prof['hybrid_score'] / max_score if max_score > 0 else 0
+                    st.progress(rel_score)
+                    st.markdown(f"- **Pontuação: {prof['hybrid_score']:.2f}**")
                     
                     # Mini-resumo COMPLETO das 6 variáveis
                     det = prof.get('details', {})
                     # Usamos nomes curtos para caber
                     pesq_val = det.get('raw_pesq', det.get('raw_prod',0)*0.5)
+                    # Exibe os valores NORMALIZADOS (Notas)
                     resumo = (f"Area:1.0 | Exp:{det.get('raw_exp',0):.1f} | Prod:{det.get('raw_prod',0):.1f} | "
                               f"Efi:{det.get('raw_efi',0):.1f} | Colab:{det.get('raw_colab',0):.1f} | Pesq:{pesq_val:.1f}")
                     
