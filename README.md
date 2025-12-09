@@ -77,13 +77,13 @@ O **Score de Afinidade** é calculado a partir de um pipeline de 3 estágios:
 
 ## 🛠️ Tecnologias Utilizadas
 
-- **Python 3.10+**
-- **Streamlit** — interface web interativa
-- **SQLite** — banco relacional principal
-- **spaCy** — processamento de linguagem natural
-- **Pandas** — manipulação de dados
-- **Scikit-learn** — cálculo de métricas e pontuações
-- **SQLite3** — conexão com SQLite
+- **Python 3.10+** — linguagem de programação;
+- **Streamlit** — interface web interativa;
+- **SQLite** — banco relacional principal;
+- **spaCy** — processamento de linguagem natural;
+- **Pandas** — manipulação de dados;
+- **Scikit-learn** — cálculo de métricas e pontuações;
+- **SQLite3** — conexão com SQLite.
 
 ---
 
