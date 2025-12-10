@@ -54,7 +54,29 @@ def set_custom_theme():
                 border-radius: 8px;
                 border: 1px solid #4b67ff;
             }
-
+            button[kind="tertiary"] {
+                padding: 0.5rem 1rem;
+                border-radius: 8px;
+                border: 1px solid #4b67ff;
+                color: white !important; 
+                transition: all 0.3s ease;
+                overflow: hidden;
+                white-space: nowrap;
+                display: block;
+                text-overflow: ellipsis;    
+            }
+            button[kind="tertiary"]:hover {
+                border-radius: 8px;
+                border: 1px solid #4b67ff;
+                background: #1e1e2e !important;
+                box-shadow: 0 4px 12px rgba(75, 103, 255, 0.4);
+                transform: translateY(-1px);
+                overflow: hidden;
+                white-space: nowrap;
+                display: block;
+                text-overflow: ellipsis;    
+            }
+            
             /* --- Cards de Resultados --- */
             div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
                 background-color: #1e1e2e;
@@ -290,7 +312,7 @@ with st.sidebar:
         st.divider()
         st.subheader(f"⭐ Favoritos ({len(st.session_state.favorites)})")
         for fid, fdat in st.session_state.favorites.items():
-            if st.button(f"{fdat['nome'][:22]}...", key=f"side_fav_{fid}"):
+            if st.button(f"{fdat['nome'][:20]}...", key=f"side_fav_{fid}", use_container_width=True, help="Ver detalhes"):
                 st.session_state.selected_prof = fdat
                 st.session_state.view_mode = "single_view"
                 st.rerun()
@@ -300,8 +322,8 @@ with st.sidebar:
         st.divider()
         with st.expander(f"🚫 Ocultados ({len(st.session_state.blacklist)})"):
              for pid, pdata in list(st.session_state.blacklist.items()):
-                c1, c2 = st.columns([3, 1])
-                c1.caption(pdata['nome'][:20])
+                c1, c2 = st.columns([3, 1], vertical_alignment="center")
+                c1.markdown(f"- {pdata['nome'][:20]}")
                 if c2.button("↺", key=f"rest_{pid}", help="Restaurar"):
                     del st.session_state.blacklist[pid]
                     st.rerun()
@@ -483,16 +505,16 @@ else:
 
                 with col_actions:
                     # Botões Verticais
-                    if st.button("★" if is_fav else "☆", key=f"fav_{prof['id']}", type="primary" if is_fav else "secondary", use_container_width=True, help="Favoritar"):
+                    if st.button("★ Nos favoritos" if is_fav else "☆ Adicionar aos favoritos", key=f"fav_{prof['id']}", type="primary" if is_fav else "secondary", use_container_width=True, help="Adiciona esse(a) professor(a) à lista de favoritos"):
                         toggle_favorite(prof)
                         st.rerun()
                     
-                    if st.button("📄 Ver", key=f"view_{prof['id']}", use_container_width=True):
+                    if st.button("📄 Ver mais detalhes", key=f"view_{prof['id']}", use_container_width=True, help="Carrega página com mais informações das variáveis e publicações"):
                         st.session_state.selected_prof = prof
                         st.session_state.view_mode = "single_view"
                         st.rerun()
                     
-                    if st.button("🚫", key=f"hide_{prof['id']}", use_container_width=True, help="Ocultar"):
+                    if st.button("🚫 Ocultar professor", key=f"hide_{prof['id']}", use_container_width=True, help="Adiciona esse(a) professor(a) à lista de ocultos"):
                         toggle_blacklist(prof)
                         st.rerun()
 
