@@ -471,7 +471,6 @@ else:
                     # Barra de Score Relativa ao Máximo da Busca Atual
                     rel_score = prof['hybrid_score'] / max_score if max_score > 0 else 0
                     st.progress(rel_score)
-                    st.markdown(f"- **Pontuação: {prof['hybrid_score']:.2f}**")
                     
                     # Mini-resumo COMPLETO das 6 variáveis
                     det = prof.get('details', {})
@@ -480,8 +479,7 @@ else:
                     # Exibe os valores NORMALIZADOS (Notas)
                     resumo = (f"Area:1.0 | Exp:{det.get('raw_exp',0):.1f} | Prod:{det.get('raw_prod',0):.1f} | "
                               f"Efi:{det.get('raw_efi',0):.1f} | Colab:{det.get('raw_colab',0):.1f} | Pesq:{pesq_val:.1f}")
-                    
-                    st.markdown(f"<div class='metric-label'>{resumo}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='score-container'> <span class='metric-label'>📊 Métricas: {resumo}</span> --> <strong>Pontuação: {prof['hybrid_score']:.2f}</strong></div> ", unsafe_allow_html=True)
 
                 with col_actions:
                     # Botões Verticais
