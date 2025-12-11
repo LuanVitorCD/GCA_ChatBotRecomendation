@@ -66,7 +66,7 @@ O **Score de Afinidade** é calculado a partir de um pipeline de 3 estágios:
 │   └── base_recomendacao.db   # Aparecerá pós extração do ".zip", é um arquivo banco de dados SQLite com dados já inseridos
 │
 ├── utils/
-│   ├──db_utils.py             # Conexão e utilidades do banco SQLite
+│   ├── db_utils.py             # Conexão e utilidades do banco SQLite
 │   └── thesis_recommend.py    # Motor de recomendação (SQLite + k-means + clustering)
 │
 └── assets/
