@@ -262,12 +262,14 @@ with st.sidebar:
     
     if mode == "Avançado (6 Variáveis)":
         with st.expander("⚖️ Personalizar Pesos", expanded=True):
-            w_area = st.slider("Área", 0.0, 1.0, 0.2, 0.1)
-            w_exp = st.slider("Experiência", 0.0, 1.0, 0.2, 0.1)
-            w_prod = st.slider("Produção", 0.0, 1.0, 0.2, 0.1)
-            w_efi = st.slider("Eficiência", 0.0, 1.0, 0.1, 0.1)
-            w_colab = st.slider("Colaboração", 0.0, 1.0, 0.1, 0.1)
-            w_pesq = st.slider("Pesquisa", 0.0, 1.0, 0.1, 0.1)
+            st.markdown("Ajuste a importância de cada critério no cálculo do Índice de Recomendação.")
+
+            w_area = st.slider("Área (aderência)", 0.0, 1.0, 0.2, 0.1, help="Peso da compatibilidade temática.")
+            w_exp = st.slider("Experiência (orientações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume de orientações.")
+            w_prod = st.slider("Produção (publicações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume de artigos e livros.")
+            w_efi = st.slider("Eficiência (taxa de conclusão)", 0.0, 1.0, 0.1, 0.1, help="Peso da taxa de sucesso nas orientações.")
+            w_colab = st.slider("Colaboração (redes)", 0.0, 1.0, 0.1, 0.1, help="Peso da coautoria e bancas.")
+            w_pesq = st.slider("Pesquisa (projetos)", 0.0, 1.0, 0.1, 0.1, help="Peso da participação em projetos.")
             
             weights = {
                 'area': w_area, 'exp': w_exp, 'prod': w_prod, 
@@ -279,8 +281,7 @@ with st.sidebar:
             # Normaliza para a barra (max 2.0 para visualização)
             bar_val = min(total_w / 2.0, 1.0)
             
-            st.markdown("---")
-            st.write(f"**Soma dos Pesos: {total_w:.1f}**")
+            st.markdown(f"**Soma dos Pesos: {total_w:.1f}**")
             
             if 0.9 <= total_w <= 1.1:
                 st.progress(bar_val, text="Equilibrado (Ideal)")
