@@ -416,6 +416,12 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
         c_b.metric("Pontos Totais de Prod.", f"{det.get('abs_prod', 'N/A')}")
 
     st.divider()
+
+    # Ver Lattes
+    lattes_url = f"https://www.google.com/search?q=Currículo+Lattes+{p['nome'].replace(' ', '+')}"
+    st.link_button("🌐 Ver Curriculo Lattes", lattes_url, use_container_width=True, type='primary')
+
+    st.divider()
     st.subheader("Publicações Recentes")
     pubs, total = cached_get_publications(p['id'], 10)
     if pubs:
