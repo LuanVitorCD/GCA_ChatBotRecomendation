@@ -13,7 +13,7 @@ A aplicação foi reimplementada com **Streamlit** para interface gráfica, **SQ
 ---
 
 ## 🖼️ Imagem do projeto rodando
-![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_modernuiwithcache_results.png)
+![Exemplo do projeto rodando com dados reais no motor moderno](assets/example_fullpage.png)
 
 ---
 
