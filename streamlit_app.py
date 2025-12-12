@@ -135,6 +135,16 @@ def set_custom_theme():
                 padding: 8px 0;
                 font-family: monospace;
             }
+            /* --- Caixa de Texto --- */
+            .text-box {
+                display: flex;
+                text-align: justify;
+                background-color: rgba(255,255,255,0.05);
+                padding: 10px;
+                border-radius: 5px;
+                font-size: 0.95em;
+                line-height: 1.5;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -276,33 +286,53 @@ def llm_explain_recommendation(prof_name, score, user_query, provider, model_nam
 
 def format_areas_display(raw_areas):
     """
-    Transforma a string bruta do banco (GA#A#SA#E | ...) em uma lista legível separada por vírgulas.
-    Remove duplicatas e hierarquias superiores redundantes se as específicas estiverem presentes.
+    Limpa a string bruta do banco, remove duplicatas, conserta capitalização 
+    e remove underlines. Retorna uma lista limpa.
     """
     if not raw_areas or "Inferido" in raw_areas:
-        return raw_areas
+        return "Área não cadastrada formalmente."
     
-    # Divide as cadeias de hierarquia (separadas por |)
+    # Divide as cadeias de hierarquia
     chains = raw_areas.split(' | ')
     clean_terms = set()
     
     for chain in chains:
         parts = chain.split('#')
-        # Pega a parte mais específica (última não vazia)
-        valid_parts = [p.strip() for p in parts if p and p.strip()]
-        if valid_parts:
-            # Adiciona a Subárea e Especialidade se existirem, senão a Área
-            if len(valid_parts) >= 3:
-                clean_terms.add(valid_parts[-2]) # Subárea
-                clean_terms.add(valid_parts[-1]) # Especialidade
-            elif len(valid_parts) >= 2:
-                clean_terms.add(valid_parts[-1]) # Área
-            else:
-                clean_terms.add(valid_parts[0]) # Grande Área
+        for p in parts:
+            p = p.strip()
+            if p and p != '-' and p.lower() != 'não informado':
+                # Remove underlines e ajusta Capitalização (Title Case)
+                cleaned_term = p.replace('_', ' ').title()
+                
+                # Ajuste fino para preposições em pt-BR (da, de, do, e)
+                cleaned_term = re.sub(r'\b(Da|De|Do|E|Em|Para)\b', lambda m: m.group(0).lower(), cleaned_term)
+                
+                clean_terms.add(cleaned_term)
     
-    # Remove strings vazias e ordena
-    clean_terms = sorted([t for t in clean_terms if t])
-    return ", ".join(clean_terms)
+    # Ordena alfabeticamente
+    sorted_terms = sorted(list(clean_terms))
+    return ", ".join(sorted_terms)
+
+def llm_summarize_profile(prof_name, raw_areas_text, provider, model_name, api_key=None):
+    """
+    Usa LLM para criar um resumo profissional legível a partir da sopa de palavras-chave.
+    """
+    if provider == "Simulação (sem IA)":
+        return None # Retorna None para usar a lista formatada padrão
+        
+    prompt = f"""
+    Aja como um redator acadêmico. Com base nas seguintes áreas de conhecimento cruas do Currículo Lattes:
+    "{raw_areas_text}"
+    
+    Escreva um resumo de 1 parágrafo (máximo 2 linhas) descrevendo o perfil de pesquisa do professor {prof_name}.
+    Comece com "Pesquisador(a) com ênfase em..." ou "Especialista em...".
+    Não use markdown, não use listas, apenas texto corrido e fluido em português.
+    Corrija formatações estranhas (ex: tire underlines).
+    """
+    
+    if provider == "Local (Ollama)": return call_ollama(prompt, model_name)
+    elif provider == "Nuvem (Gemini)": return call_gemini(prompt, api_key)
+    return None
 
 def parse_cnpq_hierarchy(raw_areas):
     """
@@ -467,59 +497,53 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
     st.title(p['nome'])
 
     # Formatação de Áreas e Idiomas
-    raw_areas = info.get('raw_hierarchy', '') # Usa raw hierarchy para parsing correto
-    areas_display = format_areas_display(raw_areas)
-    if not areas_display: areas_display = "Não informado"
+    # Limpando os dados brutos primeiro
+    raw_areas_db = info.get('raw_hierarchy', '')
+    clean_list_text = format_areas_display(raw_areas_db)
+    
+    # Tentando gerar resumo com IA (se o provedor não for Simulação) usando session_state para não re-gerar a cada clique
+    cache_key = f"summary_{p['id']}"
+    if cache_key not in st.session_state:
+        with st.spinner("Gerando resumo do perfil acadêmico..."):
+            summary = llm_summarize_profile(p['nome'], clean_list_text, llm_provider, ollama_model, api_key)
+            st.session_state[cache_key] = summary
+
+    # Decide o que mostrar: O resumo da IA ou a lista limpa
+    display_text = st.session_state[cache_key] if st.session_state[cache_key] else clean_list_text
     
     idiomas_display = info.get('idiomas', 'Não informado')
-    
-    # Parse da hierarquia CNPq para o box detalhado
-    hierarchy = parse_cnpq_hierarchy(raw_areas)
 
-    # Lógica de Inferência de Áreas (Resolve dados faltantes)
-    prof_id = p['id']
-    if "Inferido" in str(raw_areas) or len(str(areas_display)) < 5:
-        if prof_id in st.session_state.inferred_areas:
-            areas_display = st.session_state.inferred_areas[prof_id]
-            st.success("✅ Áreas inferidas via IA!")
-        else:
-            col_warn, col_btn = st.columns([3, 1])
-            with col_warn:
-                st.warning("⚠️ Áreas de Conhecimento não cadastradas no Lattes.")
-            with col_btn:
-                if st.button("🧠 Inferir Área com IA", key="btn_infer", help="Usa IA para ler os títulos das publicações e deduzir a área."):
-                    with st.spinner("Analisando publicações..."):
-                        pubs, _ = cached_get_publications(prof_id, 10)
-                        inferred = llm_infer_area_from_pubs(p['nome'], pubs, llm_provider, ollama_model, api_key)
-                        st.session_state.inferred_areas[prof_id] = inferred
-                        areas_display = inferred
-                        st.rerun()
-
-    st.markdown("### 🎓 Sobre o Pesquisador")
+    st.markdown("### 🎓 Perfil do Pesquisador")
     with st.container(border=True):
         st.markdown(f"""
         <div class="academic-info-box">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div>
-                    <span class="info-label">🏛️ Instituição:</span> {info.get('universidade', 'N/A')} ({info.get('sigla', '')})<br>
-                    <span class="info-label">🎓 Titulação:</span> {info.get('titulacao', 'N/A')} (Doutorado em {info.get('ano_doutorado', '?')})<br>
-                    <span class="info-label">🗣️ Idiomas (Pubs):</span> {idiomas_display}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div style="display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #333; padding-right: 10px;">
+                    <div>
+                        <span class="info-label">🏛️ Instituição:</span>
+                        <div class="text-box">
+                            {info.get('universidade', 'N/A')} ({info.get('sigla', '')})
+                        </div>
+                    </div>
+                    <div>
+                        <span class="info-label">🎓 Titulação:</span>
+                        <div class="text-box">
+                            {info.get('titulacao', 'N/A')} ({info.get('ano_doutorado', '?')})
+                        </div>
+                    </div>
+                    <div>
+                        <span class="info-label">🗣️ Idiomas:</span>
+                            <div class="text-box">
+                                {idiomas_display}
+                            </div>
+                    </div>
                 </div>
-                <div>
-                    <span class="info-label">🧠 Áreas de Conhecimento:</span><br>
-                    <span>{areas_display}</span>
+                <div style="display: flex; flex-direction: column;">
+                    <span class="info-label">🧠 Áreas de Atuação:</span>
+                    <div class="text-box " style="flex-grow: 1; min-height: 80px;">
+                        {display_text}
+                    </div>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Box Hierarquia CNPq -->
-        <div class="academic-info-box" style="margin-top: 10px;">
-            <span class="info-label" style="display:block; margin-bottom:5px;">📚 Classificação Hierárquica CNPq (Tese):</span>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; font-size: 0.9em;">
-                <div><strong>Grande Área:</strong><br>{hierarchy.get('Grande Área', '-')}</div>
-                <div><strong>Área:</strong><br>{hierarchy.get('Área', '-')}</div>
-                <div><strong>Subárea:</strong><br>{hierarchy.get('Subárea', '-')}</div>
-                <div><strong>Especialidade:</strong><br>{hierarchy.get('Especialidade', '-')}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
