@@ -80,7 +80,6 @@ def set_custom_theme():
                 display: block;
                 text-overflow: ellipsis;    
             }
-            
             /* --- Cards de Resultados --- */
             div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
                 background-color: #1e1e2e;
@@ -92,7 +91,6 @@ def set_custom_theme():
             div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
                 border-color: #4b67ff;
             }
-
             /* --- Score Breakdown --- */
             .score-container {
                 background: #252535;
@@ -102,9 +100,19 @@ def set_custom_theme():
                 margin-top: 10px;
                 margin-bottom: 10px;
             }
-            .metric-label { font-size: 0.75rem; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px; }
-            .metric-value { font-size: 1.1rem; color: #fff; font-weight: bold; }
-            
+            /* --- Métricas Simples --- */
+            .metric-label {
+                font-size: 0.75rem;
+                color: #bbb;
+                text-transform:
+                uppercase;
+                letter-spacing: 0.5px;
+            }
+            .metric-value {
+                font-size: 1.1rem;
+                color: #fff;
+                font-weight: bold;
+            }
             /* --- Box de Informações Acadêmicas --- */
             .academic-info-box {
                 background-color: #1a1c24;
@@ -116,8 +124,48 @@ def set_custom_theme():
             .info-label {
                 font-weight: bold;
                 color: #4b67ff !important;
+            } 
+            /* --- Cards de Métricas --- */
+            .metric-container {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr); /* 2 colunas */
+                gap: 12px;
+                margin-bottom: 50px;
             }
-
+            .metric-card {
+                background-color: #1a1c24; /* Fundo Cinza Escuro igual ao box de cima */
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 15px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                transition: transform 0.2s, border-color 0.2s;
+            }
+            .metric-card:hover {
+                border-color: #4b67ff; /* Efeito hover azul */
+                transform: translateY(-2px);
+            }
+            .metric-title {
+                font-size: 0.8rem;
+                color: #a0a0a0 !important;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 5px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .metric-value {
+                font-size: 1.6rem;
+                font-weight: 700;
+                color: #ffffff !important;
+            }
+            .metric-sub {
+                font-size: 0.75rem;
+                color: #888 !important;
+                margin-top: 2px;
+            }
             /* --- Contexto da Seção 6 --- */
             .section-context-box {
                 background-color: rgba(75, 103, 255, 0.1);
@@ -126,7 +174,6 @@ def set_custom_theme():
                 padding: 15px;
                 margin-bottom: 20px;
             }
-                
             /* --- Tabela de Auditoria --- */
             .audit-row { 
                 display: flex; 
@@ -556,61 +603,74 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
     visual_score_norm = min(p['hybrid_score'] / 1.0, 1.0) # Normalizado para 1.0
     st.progress(visual_score_norm)
     
-    st.subheader("📊 Resultado das Variáveis")
+    st.divider()
+    st.subheader("📊 Análise Multidimensional")
+    
+    # Prepara os valores calculados
     w_calc = st.session_state.last_weights if st.session_state.last_weights else weights
     
-    # Gráfico de Radar (Plotly)
-    col_metrics, col_chart = st.columns([1, 1], vertical_alignment="center")
-    
-    with col_metrics:
-        c1, c2 = st.columns(2, gap="large", border=True)
-        c1.metric("🎯 Área", f"{(det.get('raw_area', 0) * w_calc.get('area', 0.2)):.2f}")
-        c2.metric("🎓 Experiência", f"{(det.get('raw_exp', 0) * w_calc.get('exp', 0.2)):.2f}")
-        
-        c3, c4 = st.columns(2, gap="large", border=True)
-        c3.metric("📚 Produção", f"{(det.get('raw_prod', 0) * w_calc.get('prod', 0.2)):.2f}")
-        c4.metric("⚡ Eficiência", f"{(det.get('raw_efi', 0) * w_calc.get('efi', 0.1)):.2f}")
-        
-        c5, c6 = st.columns(2, gap="large", border=True)
-        c5.metric("🤝 Colaboração", f"{(det.get('raw_colab', 0) * w_calc.get('colab', 0.1)):.2f}")
-        c6.metric("🔬 Pesquisa", f"{(det.get('raw_pesq', 0) * w_calc.get('pesq', 0.1)):.2f}")
+    # Dicionário auxiliar para ícones e cálculos
+    # Formato: (Label, Ícone, Valor Bruto Normalizado, Peso, Descrição Curta)
+    metrics_data = [
+        ("Área", "🎯", det.get('raw_area', 0), w_calc.get('area', 0.2), "Aderência Temática"),
+        ("Experiência", "🎓", det.get('raw_exp', 0), w_calc.get('exp', 0.2), "Orientações"),
+        ("Produção", "📚", det.get('raw_prod', 0), w_calc.get('prod', 0.2), "Volume Bibliográfico"),
+        ("Eficiência", "⚡", det.get('raw_efi', 0), w_calc.get('efi', 0.1), "Taxa Conclusão"),
+        ("Colaboração", "🤝", det.get('raw_colab', 0), w_calc.get('colab', 0.1), "Redes/Bancas"),
+        ("Pesquisa", "🔬", det.get('raw_pesq', 0), w_calc.get('pesq', 0.1), "Projetos/Qualis")
+    ]
 
-    with col_chart:
-        # Dados para o Radar Chart
-        categories = ['Área', 'Experiência', 'Produção', 'Eficiência', 'Colaboração', 'Pesquisa']
-        # Valores normalizados (0-1) para visualização correta no radar
-        values = [
-            det.get('raw_area', 0), det.get('raw_exp', 0), det.get('raw_prod', 0),
-            det.get('raw_efi', 0), det.get('raw_colab', 0), det.get('raw_pesq', 0)
-        ]
+    # Container Principal
+    with st.container():
+        col_metrics, col_chart = st.columns([1.2, 1], gap="medium", vertical_alignment="center")
         
-        # Fecha o ciclo para gráfico de radar
-        values += values[:1]
-        categories += categories[:1]
+        # --- COLUNA DA ESQUERDA: GRID DE CARDS ---
+        with col_metrics:
+            html_cards = '<div class="metric-container">'
+            for label, icon, raw_val, weight, desc in metrics_data:
+                final_val = raw_val * weight
+                html_cards += f"""<div class="metric-card">
+                    <div class="metric-title">{icon} {label}</div>
+                    <div class="metric-value">{final_val:.2f}</div>
+                    <div class="metric-sub">{desc}</div>
+                </div>
+                """
+            html_cards += '</div>'
+            st.markdown(html_cards, unsafe_allow_html=True)
 
-        fig = go.Figure(data=go.Scatterpolar(
-            r=values,
-            theta=categories,
-            fill='toself',
-            name=p['nome'],
-            line_color='#4b67ff',
-            marker=dict(color='#4b67ff'),
-            opacity=0.7
-        ))
+        # --- COLUNA DA DIREITA: GRÁFICO DE RADAR ---
+        with col_chart:
+            # Dados para o Radar Chart
+            categories = [m[0] for m in metrics_data]
+            values = [m[2] for m in metrics_data] # Usa valor bruto (0-1) para o radar preencher corretamente
+            
+            # Fecha o ciclo
+            values += values[:1]
+            categories += categories[:1]
 
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 1], gridcolor='#444', showticklabels=False),
-                bgcolor='rgba(0,0,0,0)',
-                angularaxis=dict(gridcolor='#444', linecolor='#4b67ff')
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            margin=dict(l=40, r=40, t=20, b=20),
-            showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            fig = go.Figure(data=go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name=p['nome'],
+                line_color='#4b67ff',
+                fillcolor='rgba(75, 103, 255, 0.2)', # Azul translúcido
+                marker=dict(color='#4b67ff', size=4),
+            ))
+
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 1], gridcolor='#333', tickfont=dict(size=8, color='#666')),
+                    bgcolor='rgba(0,0,0,0)',
+                    angularaxis=dict(gridcolor='#333', linecolor='#4b67ff', tickfont=dict(size=11, color='#ddd'))
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=30, r=30, t=30, b=30),
+                showlegend=False,
+                height=600
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # Auditoria Detalhada
     with st.expander("🧮 Auditoria do Cálculo (Validar Pesos)", expanded=True):
