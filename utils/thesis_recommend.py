@@ -242,6 +242,10 @@ class Ranking(object):
         if not whereClause: return []
         conn = get_db_connection()
         
+        # Define janela de "Pesquisa Ativa" (ex: últimos 4 anos)
+        current_year = datetime.datetime.now().year
+        start_year_recent = current_year - 4
+
         # SQL Modificado para buscar a Hierarquia CNPq concatenada e remover dependência de status
         sql = f"""
         SELECT 
@@ -272,11 +276,12 @@ class Ranking(object):
             (SELECT CAST(COUNT(*) AS FLOAT) FROM orientacao WHERE id_pessoa = pe.id AND natureza IN ('MESTRADO', 'DOUTORADO')) as total_orientacoes,
             
             -- P_EFI: Eficiência
-            -- Como não temos status 'CONCLUIDA', usamos o ano como proxy: orientações com ano < 2024 são assumidas concluídas
-            (SELECT CAST(COUNT(*) AS FLOAT) FROM orientacao WHERE id_pessoa = pe.id AND natureza IN ('MESTRADO', 'DOUTORADO') AND ano < 2024) as orientacoes_concluidas_est,
+            -- Usando o ano como proxy: orientações realizadas a pelo menos um ano atrás são assumidas concluídas
+            (SELECT CAST(COUNT(*) AS FLOAT) FROM orientacao WHERE id_pessoa = pe.id AND natureza IN ('MESTRADO', 'DOUTORADO') AND ano < {current_year}) as orientacoes_concluidas_est,
             
-            -- P_QUAL: Qualidade (Qualis A1/A2) - Base para Produção/Pesquisa
-            (SELECT COALESCE(SUM(CASE WHEN q.estrato IN ('A1','A2') THEN 1.0 ELSE 0.2 END), 0) FROM publicacao p JOIN qualis q ON p.issn = q.issn WHERE p.id_pessoa = pe.id) as raw_qual,
+            -- P_PESQ: Pesquisa Ativa
+            -- Conta publicações apenas dos últimos 4 anos. Se publica hoje, tem pesquisa ativa.
+            (SELECT CAST(COUNT(*) AS FLOAT) FROM publicacao WHERE id_pessoa = pe.id AND ano >= {start_year_recent}) as raw_pesq,
              
             -- P_COLAB: Colaboração
             -- Contagem simples de publicações como proxy de rede, ajustado
@@ -304,13 +309,12 @@ class Ranking(object):
         w_efi = weights.get('efi', 0.1)
         w_colab = weights.get('colab', 0.1)
         w_pesq = weights.get('pesq', 0.1) 
-        w_qual = weights.get('qual', 0.1) 
 
         # --- NORMALIZAÇÃO RELATIVA AO GRUPO (Tese) ---
         # Encontra os máximos do dataset atual para normalizar (Eq. 3, 5, 8)
         max_prod = df['raw_prod'].max() or 1.0
         max_orientacoes = df['total_orientacoes'].max() or 1.0
-        max_qual = df['raw_qual'].max() or 1.0
+        max_pesq_ativa = df['raw_pesq'].max() or 1.0
         max_pubs_total = df['total_pubs'].max() or 1.0
 
         for _, row in df.iterrows():
@@ -347,11 +351,8 @@ class Ranking(object):
             s_colab = row['total_pubs'] / max_pubs_total
 
             # 6. P_PESQUISA
-            # Proxy: Qualidade da produção (A1/A2) normalizada
-            s_pesq = row['raw_qual'] / max_qual
-            
-            # Qualidade usada para cálculo
-            s_qual = row['raw_qual'] / max_qual
+            # Proxy: Atividade Recente (Últimos 4 anos)
+            s_pesq = row['raw_pesq'] / max_pesq_ativa
 
             # --- SCORE FINAL (Soma Ponderada) ---
             final_score = (s_area * w_area) + \
@@ -373,17 +374,20 @@ class Ranking(object):
                     'universidade': row['universidade'],
                     'sigla': row['sigla_inst'],
                     'areas': areas_display[:100] + "...",
-                    'raw_hierarchy': row['hierarquia_cnpq'], # IMPORTANTE: Envia a string bruta para o frontend fazer o split correto
+                    'raw_hierarchy': row['hierarquia_cnpq'],
                     'ano_doutorado': row['ano_doutorado'],
                     'idiomas': row['idiomas_publicacao']
                 },
                 'details': {
                     'raw_area': s_area,
-                    'raw_prod': s_prod, 'raw_exp': s_exp, 'raw_qual': s_qual,
-                    'raw_efi': s_efi, 'raw_colab': s_colab, 'raw_pesq': s_pesq,
+                    'raw_prod': s_prod,
+                    'raw_exp': s_exp,
+                    'raw_pesq': s_pesq,
+                    'raw_efi': s_efi,
+                    'raw_colab': s_colab,
                     'abs_prod': row['raw_prod'],
                     'abs_exp': row['total_orientacoes'],
-                    'abs_qual': row['raw_qual']
+                    'abs_pesq': row['raw_pesq']
                 }
             })
             
