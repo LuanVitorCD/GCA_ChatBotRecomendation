@@ -10,7 +10,7 @@
 
 ## 💡 Visão Geral
 
-O sistema utiliza dados extraídos do **Currículo Lattes**, além de métricas de impacto (DOI, Impact Factor, CiteScore).  
+O sistema processa dados brutos do **Currículo Lattes (XML)**, aplicando normalização estatística para gerar indicadores de desempenho relativo. 
 
 A aplicação foi reimplementada com **Streamlit** para interface gráfica, **SQLite** como banco de dados (para facilidade de distribuição) e integração com LLMs para refinamento de busca.
 
@@ -49,18 +49,48 @@ A recomendação segue o pipeline definido na Tese, processando o *Score de Afin
    - Algoritmos (Birch/KMeans) filtram docentes no mesmo cluster semântico.
 
 2. **Cálculo Multifatorial (6 variáveis)**
-   - Para os candidatos filtrados, o sistema calcula scores normalizados em 6 dimensões:
-      - 🎯 **Área ($P_{Area}$):** Aderência hierárquica (Grande Área > Área > Subárea).
-      - 🎓 **Experiência ($P_{Exp}$):** Volume histórico de orientações (Mestrado/Doutorado).
-      - ⚡ **Eficiência ($P_{Efi}$):** Taxa de conclusão e sucesso nas orientações.
-      - 📚 **Produção ($P_{Prod}$):** Volume bibliográfico ponderado (Artigos, Livros).
-      - 🤝 **Colaboração ($P_{Colab}$):** Redes de coautoria e participação em bancas.
-      - 🔬 **Pesquisa ($P_{Pesq}$):** Envolvimento em projetos e qualidade (Qualis).
+   Para os candidatos filtrados, o sistema calcula scores normalizados. Para garantir a execução independente de APIs externas (como Google Scholar), as definições matemáticas foram adaptadas para utilizar exclusivamente a riqueza de dados do **Currículo Lattes (XML)**:
+
+   | Dimensão | Definição Teórica | Implementação (Proxy) | Justificativa Técnica |
+   | :--- | :--- | :--- | :--- |
+   | 🎯 **Área** ($P_{Area}$) | Hierarquia CNPq | **Coincidência Hierárquica** | Cálculo exato de sobreposição (Grande Área > Área > Subárea). |
+   | 🎓 **Experiência** ($P_{Exp}$) | Orientações Ponderadas | **Volume Normalizado** | A contagem total de orientações (Mestrado/Doutorado) reflete a senioridade na formação de RH. |
+   | 📚 **Produção** ($P_{Prod}$) | Impacto Bibliométrico | **Volume Ponderado** | A densidade de produção (Artigos/Livros) é um forte indicativo de *output* científico em bases locais. |
+   | ⚡ **Eficiência** ($P_{Efi}$) | Taxa de Sucesso | **Taxa de Conclusão** | Razão entre orientações concluídas e totais, inferindo a capacidade de fluxo do orientador. |
+   | 🤝 **Colaboração** ($P_{Colab}$) | Grafos de Coautoria | **Densidade de Rede** | O volume de produção colaborativa é utilizado como proxy para a inserção do pesquisador na comunidade. |
+   | 🔬 **Pesquisa** ($P_{Pesq}$) | Projetos Financiados | **Recência (Pesquisa Ativa)** | Mede a produção nos últimos 4 anos. Garante que o sistema recomende pesquisadores ativos atualmente, diferenciando-os de perfis inativos. |
+
+   > **Nota:** Todas as métricas são normalizadas dinamicamente ($Score \in [0, 1]$) com base no máximo valor encontrado no cluster de candidatos da busca atual.
 
 ![Variáveis usadas na recomendação](assets/variables_used.png)
 
 3. **Ranking Ponderado**
 - O usuário pode ajustar os pesos ($\alpha$) de cada variável, permitindo buscas focadas (ex: "Quero alguém com muita produção", ou "Prefiro alguém com muita experiência em orientar").
+
+
+---
+
+## 📘 Relação com a Tese de Doutorado
+
+Este sistema é uma **implementação aplicada e validável** do modelo proposto na tese:
+
+> *Modelagem Matemática para Recomendação de Orientadores em Programas de Pós-Graduação Stricto Sensu*  
+> Radi Melo Martins, 2025.
+
+O núcleo matemático do Índice de Recomendação (IR), suas variáveis e forma de ponderação seguem fielmente o modelo descrito na tese.
+
+### Adaptações para Uso Prático
+Algumas adaptações foram realizadas para viabilizar:
+- Uso por alunos de graduação e pós;
+- Distribuição simples;
+- Independência de APIs externas.
+
+Essas adaptações incluem:
+- Uso exclusivo de dados do Currículo Lattes (XML);
+- Proxies matemáticos para métricas bibliométricas externas;
+- Integração de NLP e LLMs **SOMENTE** como camada de interface e explicabilidade, **sem interferir no cálculo do IR (ele não mexe no cálculo matemático do score)**.
+
+Essas decisões **não alteram o modelo conceitual**, apenas sua operacionalização.
 
 
 ---
@@ -120,15 +150,29 @@ O projeto utiliza um banco de dados **SQLite** portável, estruturado para relac
 
 ## ⚙️ Instalação
 
+### 1. Clone o repositório
 ```bash
 git clone https://github.com/LuanVitorCD/GCA_ChatBotRecomendation.git
 cd GCA_ChatBotRecomendation
+```
 
+### 2. Crie um ambiente virtual
+- Windows
+```bash
 python -m venv venv
-source venv/bin/activate   # Linux/Mac
-venv\Scripts\activate      # Windows
+venv\Scripts\activate
 pip install -r requirements.txt
+```
 
+- Linux/Mac
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Baixar modelo de linguagem
+```bash
 python -m spacy download pt_core_news_md
 ```
 
