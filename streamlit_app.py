@@ -461,12 +461,12 @@ with st.sidebar:
     if mode == "Avançado (6 Variáveis)":
         with st.expander("⚖️ Personalizar Pesos", expanded=True):
             st.markdown("Ajuste a importância de cada critério no cálculo.")
-            w_area = st.slider("Área (aderência)", 0.0, 1.0, 0.2, 0.1, help="Peso da compatibilidade temática.")
-            w_exp = st.slider("Experiência (orientações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume histórico de orientações.")
-            w_prod = st.slider("Produção (publicações)", 0.0, 1.0, 0.2, 0.1, help="Peso do volume bibliográfico.")
-            w_efi = st.slider("Eficiência (conclusão)", 0.0, 1.0, 0.1, 0.1, help="Peso da taxa de sucesso (conclusão/total).")
-            w_colab = st.slider("Colaboração (redes)", 0.0, 1.0, 0.1, 0.1, help="Peso da inserção em bancas e redes.")
-            w_pesq = st.slider("Pesquisa (projetos)", 0.0, 1.0, 0.1, 0.1, help="Peso da participação em projetos de pesquisa.")
+            w_area = st.slider("Área (aderência)", 0.0, 1.0, 0.2, 0.05, help="Peso da compatibilidade temática.")
+            w_exp = st.slider("Experiência (orientações)", 0.0, 1.0, 0.2, 0.05, help="Peso do volume histórico de orientações.")
+            w_prod = st.slider("Produção (publicações)", 0.0, 1.0, 0.2, 0.05, help="Peso do volume bibliográfico.")
+            w_efi = st.slider("Eficiência (conclusão)", 0.0, 1.0, 0.1, 0.05, help="Peso da taxa de sucesso (conclusão/total).")
+            w_colab = st.slider("Colaboração (redes)", 0.0, 1.0, 0.1, 0.05, help="Peso da inserção em bancas e redes.")
+            w_pesq = st.slider("Pesquisa (projetos)", 0.0, 1.0, 0.1, 0.05, help="Peso da participação em projetos de pesquisa.")
             
             weights = {
                 'area': w_area, 'exp': w_exp, 'prod': w_prod, 
@@ -721,7 +721,7 @@ else:
     # Contexto Acadêmico
     st.markdown("""
     <div class="section-context-box">
-        <strong>🧪 Contexto Experimental (Seção 6):</strong><br>
+        <strong>Contexto Experimental:</strong><br>
         Esta ferramenta materializa a implementação computacional do <strong>modelo matemático da Tese de Doutorado de <em>Radi Melo Martins (2025)</em> [1]</strong>.
         Utilize a busca abaixo para validar a sensibilidade das 6 dimensões propostas (Área, Experiência, Eficiência, Produção, Colaboração, Pesquisa).
     </div>
