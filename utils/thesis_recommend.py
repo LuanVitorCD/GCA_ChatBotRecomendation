@@ -244,7 +244,8 @@ class Ranking(object):
         
         # Define janela de "Pesquisa Ativa" (ex: últimos 4 anos)
         current_year = datetime.datetime.now().year
-        start_year_recent = current_year - 4
+        start_year_recent = current_year - 8 #! temporário por conta da database ainda ser a com os dados antigos
+        #TODO: Adicionar um checkbox para permitir ligar ou desligar o modo de "Pesquisa Ativa Estendida"
 
         # SQL Modificado para buscar a Hierarquia CNPq concatenada e remover dependência de status
         sql = f"""
