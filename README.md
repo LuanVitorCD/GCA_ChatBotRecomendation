@@ -74,8 +74,10 @@ A recomendação segue o pipeline definido na Tese, processando o *Score de Afin
 
 Este sistema é uma **implementação aplicada e validável** do modelo proposto na tese:
 
-> *Modelagem Matemática para Recomendação de Orientadores em Programas de Pós-Graduação Stricto Sensu*  
+> *Modelagem Matemática para Recomendação de Orientadores em Programas de Pós-Graduação Stricto Sensu*
 > Radi Melo Martins, 2025.
+
+**Link para acessar a tese:** https://repositorio.uft.edu.br/handle/11612/7963?locale=pt_BR
 
 O núcleo matemático do Índice de Recomendação (IR), suas variáveis e forma de ponderação seguem fielmente o modelo descrito na tese.
 
