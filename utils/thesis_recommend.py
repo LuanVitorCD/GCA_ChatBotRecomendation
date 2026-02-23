@@ -238,14 +238,14 @@ class Ranking(object):
         intersection = u_tok.intersection(p_tok)
         return min(1.0, 0.2 + (0.8 * (len(intersection) / len(u_tok))))
 
-    def getRanking(self, whereClause, weights):
+    def getRanking(self, whereClause, weights, lookback_years=4):
         if not whereClause: return []
         conn = get_db_connection()
         
-        # Define janela de "Pesquisa Ativa" (ex: últimos 4 anos)
+        # Define janela de "Pesquisa Ativa" dinamicamente
         current_year = datetime.datetime.now().year
-        start_year_recent = current_year - 8 #! temporário por conta da database ainda ser a com os dados antigos
-        #TODO: Adicionar um checkbox para permitir ligar ou desligar o modo de "Pesquisa Ativa Estendida"
+        # O padrão passa a ser dinâmico (4 ou 8 anos dependendo do input)
+        start_year_recent = current_year - lookback_years
 
         # SQL Modificado para buscar a Hierarquia CNPq concatenada e remover dependência de status
         sql = f"""
@@ -281,7 +281,7 @@ class Ranking(object):
             (SELECT CAST(COUNT(*) AS FLOAT) FROM orientacao WHERE id_pessoa = pe.id AND natureza IN ('MESTRADO', 'DOUTORADO') AND ano < {current_year}) as orientacoes_concluidas_est,
             
             -- P_PESQ: Pesquisa Ativa
-            -- Conta publicações apenas dos últimos 4 anos. Se publica hoje, tem pesquisa ativa.
+            -- Conta publicações apenas dos últimos X anos (start_year_recent). Se publica hoje, tem pesquisa ativa.
             (SELECT CAST(COUNT(*) AS FLOAT) FROM publicacao WHERE id_pessoa = pe.id AND ano >= {start_year_recent}) as raw_pesq,
              
             -- P_COLAB: Colaboração
@@ -352,7 +352,7 @@ class Ranking(object):
             s_colab = row['total_pubs'] / max_pubs_total
 
             # 6. P_PESQUISA
-            # Proxy: Atividade Recente (Últimos 4 anos)
+            # Proxy: Atividade Recente (Últimos X anos)
             s_pesq = row['raw_pesq'] / max_pesq_ativa
 
             # --- SCORE FINAL (Soma Ponderada) ---
@@ -399,7 +399,7 @@ class Ranking(object):
 clusterPalavras = ClusterPalavras()
 clusterPalavrasChaves = ClusterPalavrasChaves()
 
-def thesis_recommendation_engine(originalText, only_doctors=False, weights=None, student_area_struct=None):
+def thesis_recommendation_engine(originalText, only_doctors=False, weights=None, student_area_struct=None, lookback_years=4):
     if weights is None: weights = {}
     if nlp is None: raise ImportError("Spacy não carregado.")
 
@@ -437,8 +437,8 @@ def thesis_recommendation_engine(originalText, only_doctors=False, weights=None,
             ids_df = clusterPalavrasChaves.getAllPeopleIDFromCluster(result)
             if not ids_df.empty: whereClause = ', '.join(ids_df.values)
 
-        # 4. Ranking (Passando a estrutura de área do aluno)
-        return Ranking(cleaned, student_area_struct).getRanking(whereClause, weights)
+        # 4. Ranking (Passando a estrutura de área do aluno e a janela temporal)
+        return Ranking(cleaned, student_area_struct).getRanking(whereClause, weights, lookback_years)
 
     except Exception as e:
         print(f"Erro Engine: {e}")

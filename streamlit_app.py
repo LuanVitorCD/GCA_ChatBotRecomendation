@@ -33,169 +33,310 @@ st.set_page_config(
 # --------------------------------------------------------------------------- #
 #                       ESTILIZAÇÃO (CSS PERSONALIZADO)                       #
 # --------------------------------------------------------------------------- #
-def set_custom_theme():
-    st.markdown("""
+def set_custom_theme(theme_mode="Escuro"):
+    # Definição das paletas de cores para injeção dinâmica
+    if theme_mode == "Claro":
+        colors = {
+            "bg": "#FFFFFF",
+            "sidebar_bg": "#F0F2F6", 
+            "text": "#000000",       # Preto absoluto para títulos
+            "subtext": "#333333",    # Cinza escuro para leitura (Contraste aumentado)
+            "card_bg": "#FFFFFF",
+            "card_border": "#333333",
+            "primary": "#4b67ff",
+            "primary_hover": "#3b55cc",
+            "box_bg": "rgba(75, 103, 255, 0.05)",
+            "metric_label": "#444444",
+            "metric_value": "#000000",
+            "audit_border": "#EEEEEE",
+            "input_bg": "#FAFAFA",   # Input levemente destacado do fundo branco
+            "input_text": "#000000",
+            "placeholder": "#666666", # Cinza médio para placeholder (visível no branco)
+            "expander_bg": "#FFFFFF",
+            "summary_border": "rgba(14, 17, 23, 0.2)"
+        }
+    else: # Padrão Escuro
+        colors = {
+            "bg": "#0E1117",
+            "sidebar_bg": "#1E1E2E",
+            "text": "#FFFFFF",
+            "subtext": "#E0E0E0",
+            "card_bg": "#1e1e2e",
+            "card_border": "#1E1E2E",
+            "primary": "#4b67ff",
+            "primary_hover": "#3b55cc",
+            "box_bg": "rgba(255,255,255,0.05)",
+            "metric_label": "#bbb",
+            "metric_value": "#fff",
+            "audit_border": "#333",
+            "input_bg": "#262730",
+            "input_text": "#FAFAFA",
+            "placeholder": "#AAAAAA", # Cinza claro para placeholder (visível no escuro)
+            "expander_bg": "#1e1e2e",
+            "summary_border": "rgba(224, 224, 224, 0.2)"
+        }
+
+    st.markdown(f"""
         <style>
-            /* --- Cores e Tipografia --- */
-            .stApp { background-color: #0E1117; }
-            h1, h2, h3 { color: #FFFFFF !important; font-family: 'Helvetica Neue', sans-serif; }
-            p, label, span { color: #E0E0E0 !important; }
+            /* --- Override Global de Cores --- */
+            .stApp {{ background-color: {colors['bg']}; }}
+            
+            /* Header (Topo) */
+            header[data-testid="stHeader"] {{
+                background-color: {colors['bg']} !important;
+            }}
+
+            /* --- Correção da Área de Input (Rodapé) --- */
+            .stBottom {{
+                background-color: {colors['bg']} !important;
+                border-top: 1px solid {colors['bg']}; /* Remove linha estranha se houver */
+            }}
+            .stBottom > div {{
+                background-color: transparent !important;
+            }}
+            
+            /* --- Sidebar Override --- */
+            section[data-testid="stSidebar"] {{ 
+                background-color: {colors['sidebar_bg']}; 
+            }}
+            section[data-testid="stSidebar"] h1, 
+            section[data-testid="stSidebar"] h2, 
+            section[data-testid="stSidebar"] h3, 
+            section[data-testid="stSidebar"] label, 
+            section[data-testid="stSidebar"] span,
+            section[data-testid="stSidebar"] p {{
+                color: {colors['text']} !important;
+            }}
+
+            /* --- Expanders (Configurações de IA, etc) --- */
+            /* Garante que o fundo e a borda tenham cor certa */
+            .stExpander {{
+                background-color: {colors['expander_bg']} !important;
+                border: 1px solid {colors['card_border']} !important;
+                border-radius: 8px;
+                color: {colors['text']} !important;
+            }}
+
+            .stExpander > details > summary:expanded {{
+                background-color: {colors['expander_bg']} !important;
+                border: 1px solid {colors['card_border']} !important;
+                border-radius: 8px;
+                color: {colors['text']} !important;
+            }}
+            
+            /* Cor do texto e fundo do Expander (summary) */
+            div[data-testid="stExpander"] > details > summary {{
+                background-color: transparent !important;
+                color: {colors['text']} !important;
+            }}
+
+            div[data-testid="stExpander"] > details > summary:hover {{
+                background-color: {colors['primary']} !important;
+            }}
+
+            div[data-testid="stExpanderDetails"] {{
+                border-top: 1px solid {colors['summary_border']} !important;
+            }}
+            
+            
+            /* Conteúdo interno do Expander (Inputs, labels dentro) */
+            div[data-testid="stExpander"] div {{
+                color: {colors['subtext']} !important;
+            }}
+
+            /* --- Tipografia Geral --- */
+            h1, h2, h3 {{ color: {colors['text']} !important; font-family: 'Helvetica Neue', sans-serif; }}
+            
+            /* --- Inputs (Chat, Text, Selectbox) --- */
+            .stTextInput input, .stChatInput textarea, .stSelectbox div[data-baseweb="select"] > div {{ 
+                color: {colors['input_text']} !important; 
+                background-color: {colors['input_bg']} !important;
+                caret-color: {colors['primary']};
+                cursor: pointer;
+
+                &:hover{{
+                    border-color: {colors['primary']} !important;
+                }}
+            }}
+
+            /* Ajustes finos de padding do ChatInput (mantendo sua correção) */
+            .stChatInput > div {{
+                padding-left: 0 !important;
+                margin-left: 10px;
+            }}
+            .stChatInput > div > div > div > textarea {{
+                padding-left: 1rem !important;
+            }}
+
+            /* Placeholder: garante visibilidade */
+            ::placeholder {{
+                color: {colors['placeholder']} !important;
+                opacity: 1; 
+            }}
             
             /* --- Botões --- */
-            button[kind="primary"] { 
-                background-color: #4b67ff !important; 
+            button[kind="primary"] {{ 
+                background-color: {colors['primary']} !important; 
                 color: white !important; 
                 border-radius: 8px;
                 border: none; 
                 transition: all 0.3s ease;
-            }
-            button[kind="primary"]:hover {
-                background-color: #3b55cc !important;
+            }}
+            button[kind="primary"]:hover {{
+                background-color: {colors['primary_hover']} !important;
                 box-shadow: 0 4px 12px rgba(75, 103, 255, 0.4);
                 transform: translateY(-1px);
-            }
-            button[kind="secondary"] {
+            }}
+            button[kind="secondary"] {{
                 border-radius: 8px;
-                border: 1px solid #4b67ff;
-            }
-            button[kind="tertiary"] {
+                border: 1px solid {colors['primary']};
+                color: {colors['subtext']} !important;
+                background-color: transparent !important;
+            }}
+            button[kind="tertiary"] {{
                 padding: 0.5rem 1rem;
                 border-radius: 8px;
-                border: 1px solid #4b67ff;
-                color: white !important; 
+                border: 1px solid {colors['primary']};
+                color: {colors['text']} !important; 
                 transition: all 0.3s ease;
                 overflow: hidden;
                 white-space: nowrap;
                 display: block;
                 text-overflow: ellipsis;    
-            }
-            button[kind="tertiary"]:hover {
+            }}
+            button[kind="tertiary"]:hover {{
                 border-radius: 8px;
-                border: 1px solid #4b67ff;
-                background: #1e1e2e !important;
+                border: 1px solid {colors['primary']};
+                background: {colors['card_bg']} !important;
                 box-shadow: 0 4px 12px rgba(75, 103, 255, 0.4);
                 transform: translateY(-1px);
                 overflow: hidden;
                 white-space: nowrap;
                 display: block;
                 text-overflow: ellipsis;    
-            }
+            }}
             /* --- Cards de Resultados --- */
-            div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-                background-color: #1e1e2e;
+            div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] {{
+                background-color: {colors['card_bg']};
                 border-radius: 12px;
                 padding: 15px;
-                border: 1px solid #333;
+                border: 1px solid {colors['card_border']};
                 transition: border-color 0.3s;
-            }
-            div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-                border-color: #4b67ff;
-            }
+            }}
+            div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"]:hover {{
+                border-color: {colors['primary']};
+            }}
             /* --- Score Breakdown --- */
-            .score-container {
-                background: #252535;
+            .score-container {{
+                background: {colors['box_bg']};
                 padding: 10px;
                 border-radius: 8px;
-                border-left: 4px solid #4b67ff;
+                border-left: 4px solid {colors['primary']};
                 margin-top: 10px;
                 margin-bottom: 10px;
-            }
+            }}
             /* --- Métricas Simples --- */
-            .metric-label {
+            .metric-label {{
                 font-size: 0.75rem;
-                color: #bbb;
-                text-transform:
-                uppercase;
+                color: {colors['metric_label']} !important;
+                text-transform: uppercase;
                 letter-spacing: 0.5px;
-            }
-            .metric-value {
+            }}
+            .metric-value {{
                 font-size: 1.1rem;
-                color: #fff;
+                color: {colors['metric_value']} !important;
                 font-weight: bold;
-            }
+            }}
             /* --- Box de Informações Acadêmicas --- */
-            .academic-info-box {
-                background-color: #1a1c24;
-                border: 1px solid #444;
+            .academic-info-box {{
+                background-color: {colors['card_bg']};
+                border: 1px solid {colors['card_border']};
                 border-radius: 8px;
                 padding: 15px;
                 margin-bottom: 20px;
-            }
-            .info-label {
+            }}
+            .info-label {{
                 font-weight: bold;
-                color: #4b67ff !important;
-            } 
+                color: {colors['primary']} !important;
+            }} 
             /* --- Cards de Métricas --- */
-            .metric-container {
+            .metric-container {{
                 display: grid;
                 grid-template-columns: repeat(2, 1fr); /* 2 colunas */
                 gap: 12px;
                 margin-bottom: 50px;
-            }
-            .metric-card {
-                background-color: #1a1c24; /* Fundo Cinza Escuro igual ao box de cima */
-                border: 1px solid #444;
+            }}
+            .metric-card {{
+                background-color: {colors['card_bg']};
+                border: 1px solid {colors['card_border']};
                 border-radius: 8px;
                 padding: 15px;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
                 transition: transform 0.2s, border-color 0.2s;
-            }
-            .metric-card:hover {
-                border-color: #4b67ff; /* Efeito hover azul */
+            }}
+            .metric-card:hover {{
+                border-color: {colors['primary']}; /* Efeito hover azul */
                 transform: translateY(-2px);
-            }
-            .metric-title {
+            }}
+            .metric-title {{
                 font-size: 0.8rem;
-                color: #a0a0a0 !important;
+                color: {colors['metric_label']} !important;
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
                 margin-bottom: 5px;
                 display: flex;
                 align-items: center;
                 gap: 6px;
-            }
-            .metric-value {
+            }}
+            .metric-value {{
                 font-size: 1.6rem;
                 font-weight: 700;
-                color: #ffffff !important;
-            }
-            .metric-sub {
+                color: {colors['metric_value']} !important;
+            }}
+            .metric-sub {{
                 font-size: 0.75rem;
-                color: #888 !important;
+                color: {colors['subtext']} !important;
                 margin-top: 2px;
-            }
+            }}
             /* --- Contexto da Seção 6 --- */
-            .section-context-box {
-                background-color: rgba(75, 103, 255, 0.1);
-                border: 1px solid #4b67ff;
+            .section-context-box {{
+                background-color: {colors['box_bg']};
+                border: 1px solid {colors['primary']};
                 border-radius: 8px;
                 padding: 15px;
                 margin-bottom: 20px;
-            }
+                color: {colors['subtext']} !important; /* CORREÇÃO: Força cor no texto cru */
+            }}
+            .section-context-box strong {{
+                color: {colors['text']} !important;
+            }}
             /* --- Tabela de Auditoria --- */
-            .audit-row { 
+            .audit-row {{ 
                 display: flex; 
                 justify-content: space-between; 
-                border-bottom: 1px solid #333; 
+                border-bottom: 1px solid {colors['audit_border']}; 
                 padding: 8px 0;
                 font-family: monospace;
-            }
+            }}
             /* --- Caixa de Texto --- */
-            .text-box {
+            .text-box {{
                 display: flex;
                 text-align: justify;
-                background-color: rgba(255,255,255,0.05);
+                color: {colors['text']};
+                background-color: {colors['box_bg']};
                 padding: 10px;
                 border-radius: 5px;
                 font-size: 0.95em;
                 line-height: 1.5;
-            }
+            }}
+
+            .stElementContainer {{
+                color: {colors['text']} !important;
+            }}
         </style>
     """, unsafe_allow_html=True)
-
-set_custom_theme()
 
 # --------------------------------------------------------------------------- #
 #                      GERENCIAMENTO DE ESTADO & CACHE                        #
@@ -218,9 +359,9 @@ if 'inferred_areas' not in st.session_state: st.session_state.inferred_areas = {
 # O Streamlit não recalculará isso se os parâmetros não mudarem.
 # 'ttl=3600' mantém o cache por 1 hora.
 @st.cache_data(ttl=3600, show_spinner=False)
-def cached_recommendation_engine(query, weights, student_area_struct):
-    # Passamos a estrutura de área do aluno para o backend
-    return thesis_recommendation_engine(query, False, weights, student_area_struct)
+def cached_recommendation_engine(query, weights, student_area_struct, lookback_years):
+    # Passamos a estrutura de área do aluno para o backend e a janela temporal
+    return thesis_recommendation_engine(query, False, weights, student_area_struct, lookback_years)
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_get_publications(prof_id, limit):
@@ -437,7 +578,7 @@ def toggle_blacklist(prof):
     else:
         # Se estava nos favoritos, remove de lá primeiro
         if pid in st.session_state.favorites: del st.session_state.favorites[pid]
-        st.session_state.blacklist[pid] = prof
+        st.session_state.favorites[pid] = prof
         # Remove da lista visual atual imediatamente para feedback instantâneo
         st.session_state.current_results = [p for p in st.session_state.current_results if p['id'] != pid]
         st.toast("Ocultado.", icon="🚫")
@@ -449,9 +590,20 @@ with st.sidebar:
     st.header("🎓 RecomendaProf")
     st.markdown("*Implementação do Modelo Matemático (Radi, 2025)*")
     st.divider()
+
+    # --- Configuração Visual ---
+    st.subheader("🎨 Aparência")
+    theme_choice = st.radio("Tema", ["Escuro", "Claro"], horizontal=True, help="O modo Claro é recomendado para capturas de tela do artigo.")
+    set_custom_theme(theme_choice) # Aplica o CSS baseado na escolha
+    st.divider()
     
     # --- Configuração do Modelo ---
     st.subheader("⚙️ Parâmetros do Modelo")
+    
+    # Checkbox Pesquisa Ativa
+    extended_search = st.checkbox("Pesquisa Ativa Estendida", value=False, help="Se marcado, considera publicações dos últimos 8 anos (em vez de 4) para o cálculo de P_PESQ.")
+    lookback_val = 8 if extended_search else 4
+
     help_modes = "Padrão: Pesos equilibrados (Área 0.2, Exp 0.2, Prod 0.2).\nAvançado: Ajuste manual de cada dimensão."
     mode = st.radio("Modo de Operação", ["Padrão (Otimizado)", "Avançado (6 Variáveis)"], help=help_modes)
     
@@ -565,7 +717,7 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
         st.markdown(f"""
         <div class="academic-info-box">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div style="display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #333; padding-right: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #333333; padding-right: 10px;">
                     <div>
                         <span class="info-label">🏛️ Instituição:</span>
                         <div class="text-box">
@@ -648,6 +800,10 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
             values += values[:1]
             categories += categories[:1]
 
+            # Ajuste de cores do gráfico baseado no tema
+            text_color = '#000000' if theme_choice == "Claro" else '#ffffff'
+            grid_color = '#cccccc' if theme_choice == "Claro" else '#333333'
+            
             fig = go.Figure(data=go.Scatterpolar(
                 r=values,
                 theta=categories,
@@ -660,9 +816,9 @@ if st.session_state.view_mode == "single_view" and st.session_state.selected_pro
 
             fig.update_layout(
                 polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 1], gridcolor='#333', tickfont=dict(size=8, color='#666')),
+                    radialaxis=dict(visible=True, range=[0, 1], gridcolor=grid_color, tickfont=dict(size=8, color='#666')),
                     bgcolor='rgba(0,0,0,0)',
-                    angularaxis=dict(gridcolor='#333', linecolor='#4b67ff', tickfont=dict(size=11, color='#ddd'))
+                    angularaxis=dict(gridcolor=grid_color, linecolor='#4b67ff', tickfont=dict(size=11, color=text_color))
                 ),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
@@ -749,12 +905,12 @@ else:
             # Mostra o que a IA entendeu (Debug útil para validação)
             st.toast(f"Mapeado para: {area_struct.get('area', 'N/A')} > {area_struct.get('sub_area', 'N/A')}", icon="🤖")
             
-            st.write("Calculando scores multidimensionais...")
+            st.write(f"Calculando scores multidimensionais (Janela: {lookback_val} anos)...")
             st.session_state.last_weights = weights.copy()
             
             try:
-                # Passa a estrutura para o motor
-                results = cached_recommendation_engine(prompt, weights, area_struct)
+                # Passa a estrutura para o motor e a janela temporal
+                results = cached_recommendation_engine(prompt, weights, area_struct, lookback_val)
 
                 # Filtra blacklist
                 valid_results = [r for r in results if r['id'] not in st.session_state.blacklist]
