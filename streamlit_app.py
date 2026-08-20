@@ -382,22 +382,23 @@ def call_ollama(prompt, model="mistral"):
     except Exception as e:
         return f"Erro ao conectar com Ollama: {e}"
 
-def call_gemini(prompt, api_key, model="gemini-2.5-flash"):
-    """ Chamada REST simples para Gemini com Fallback automático """
+def call_gemini(prompt, api_key, model="gemini-2.5-flash", retries=1):
+    """ Chamada REST simples para Gemini com Fallback e tratamento de cota ou erro de servidor. """
     if not api_key: return "Chave de API não configurada."
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     try:
         response = requests.post(url, headers={'Content-Type': 'application/json'}, json={"contents": [{"parts": [{"text": prompt}]}]})
         if response.status_code == 200:
-            # Parse seguro da resposta Gemini
             try:
                 return response.json()['candidates'][0]['content']['parts'][0]['text']
             except (KeyError, IndexError):
                 return "Erro: Resposta vazia da API Gemini."
-        elif response.status_code == 404 and model == "gemini-2.5-flash":
-            # FALLBACK: Se o 2.5 Flash der 404, tenta o modelo estável 'gemini-pro' automaticamente
-            return call_gemini(prompt, api_key, model="gemini-pro")
+        elif response.status_code == 429 and retries > 0:
+            time.sleep(2)
+            return call_gemini(prompt, api_key, model, retries - 1)
+        elif response.status_code in [404, 500, 502, 503] and model == "gemini-2.5-flash":
+            return call_gemini(prompt, api_key, model="gemini-pro", retries=retries)
         else:
             return f"Erro na API Gemini ({model}): {response.status_code} - {response.text}"
     except Exception as e:
