@@ -579,7 +579,7 @@ def toggle_blacklist(prof):
     else:
         # Se estava nos favoritos, remove de lá primeiro
         if pid in st.session_state.favorites: del st.session_state.favorites[pid]
-        st.session_state.favorites[pid] = prof
+        st.session_state.blacklist[pid] = prof
         # Remove da lista visual atual imediatamente para feedback instantâneo
         st.session_state.current_results = [p for p in st.session_state.current_results if p['id'] != pid]
         st.toast("Ocultado.", icon="🚫")
